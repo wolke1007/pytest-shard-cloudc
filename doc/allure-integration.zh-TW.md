@@ -138,17 +138,17 @@ def pytest_runtest_call(item):
 > 在 fixture 中於 `yield` 前呼叫 `time.sleep(1)` 會在 *Set up* 階段執行，使測試本體的 duration 顯示為 0 秒 — Timeline 上不會出現可見的區塊。
 > `pytest_runtest_call` 在 *Test body* 階段執行，因此 Allure 會將完整的 1 秒記錄為測試 duration。
 
-**Shard 分配情況（hash-based，30 個測試，3 個 shard）：**
+**Shard 分配情況（round-robin，30 個測試，3 個 shard）：**
 
 | Shard | 分配到的測試數 | 執行時間 |
 |-------|--------------|---------|
-| 0 | 13 | ~13 秒 |
-| 1 | 11 | ~11 秒 |
-| 2 | 6  | ~6 秒  |
-| **合計（平行）** | **30** | **~13 秒** |
+| 0 | 10 | ~10 秒 |
+| 1 | 10 | ~10 秒 |
+| 2 | 10 | ~10 秒 |
+| **合計（平行）** | **30** | **~10 秒** |
 | 合計（循序）    | 30 | ~30 秒 |
 
-分配不均（6 vs 13）是預期行為：`pytest-shard` 以 `SHA-256(test_node_id) % num_shards` 分配測試，統計上均勻分布，但在測試數量較少時無法保證完全平衡。
+這種平均分配是預期行為：預設的 `roundrobin` 模式會先依 node ID 排序，再用 `index % num_shards` 分配，因此各 shard 的測試數量差距最多只會是 1。在這個範例中，30 個測試分到 3 個 shard，剛好得到 10/10/10 的分配。
 
 ### 以 nox 自動化
 

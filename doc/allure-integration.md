@@ -138,17 +138,17 @@ def pytest_runtest_call(item):
 > A fixture with `time.sleep(1)` before `yield` runs in *Set up*, leaving the test-body duration at 0 s — the Timeline shows no visible blocks.
 > `pytest_runtest_call` runs during *Test body*, so Allure records the full 1 s as test duration.
 
-**Shard distribution (hash-based, 30 tests, 3 shards):**
+**Shard distribution (round-robin, 30 tests, 3 shards):**
 
 | Shard | Tests assigned | Wall time |
 |-------|---------------|-----------|
-| 0 | 13 | ~13 s |
-| 1 | 11 | ~11 s |
-| 2 | 6  | ~6 s  |
-| **Total (parallel)** | **30** | **~13 s** |
+| 0 | 10 | ~10 s |
+| 1 | 10 | ~10 s |
+| 2 | 10 | ~10 s |
+| **Total (parallel)** | **30** | **~10 s** |
 | Total (sequential)   | 30 | ~30 s |
 
-The uneven distribution (6 vs 13) is expected: `pytest-shard` assigns tests via `SHA-256(test_node_id) % num_shards`, which is statistically uniform but not guaranteed to be perfectly balanced for small test counts.
+This even split is expected: the default `roundrobin` mode sorts tests by node ID and assigns them by `index % num_shards`, so shard sizes differ by at most 1. In this demo, 30 tests across 3 shards yields a perfect 10/10/10 split.
 
 ### Automating with nox
 

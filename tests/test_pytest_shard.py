@@ -4,20 +4,24 @@ import collections
 import itertools
 from types import SimpleNamespace
 
-import hypothesis
-from hypothesis import strategies
+from hypothesis import given, strategies
 import pytest
 
 from pytest_shard import pytest_shard
 
 
-@hypothesis.given(strategies.integers(min_value=0))
+@given(strategies.integers(min_value=1))
 def test_positive_int_with_pos(x):
     assert pytest_shard.positive_int(x) == x
     assert pytest_shard.positive_int(str(x)) == x
 
 
-@hypothesis.given(strategies.integers(max_value=-1))
+def test_non_negative_int_accepts_zero():
+    assert pytest_shard.non_negative_int(0) == 0
+    assert pytest_shard.non_negative_int("0") == 0
+
+
+@given(strategies.integers(max_value=0))
 def test_positive_int_with_neg(x):
     with pytest.raises(ValueError):
         pytest_shard.positive_int(x)
@@ -32,7 +36,7 @@ def test_positive_int_with_non_num():
             pytest_shard.positive_int(s)
 
 
-@hypothesis.given(strategies.text())
+@given(strategies.text())
 def test_sha256hash_deterministic(s):
     x = pytest_shard.sha256hash(s)
     y = pytest_shard.sha256hash(s)
@@ -40,7 +44,7 @@ def test_sha256hash_deterministic(s):
     assert isinstance(x, int)
 
 
-@hypothesis.given(strategies.text(), strategies.text())
+@given(strategies.text(), strategies.text())
 def test_sha256hash_no_clash(s1, s2):
     if s1 != s2:
         assert pytest_shard.sha256hash(s1) != pytest_shard.sha256hash(s2)
@@ -49,7 +53,7 @@ def test_sha256hash_no_clash(s1, s2):
 MockItem = collections.namedtuple("MockItem", "nodeid")
 
 
-@hypothesis.given(
+@given(
     names=strategies.lists(strategies.text(), unique=True),
     num_shards=strategies.integers(min_value=1, max_value=500),
 )
@@ -70,3 +74,17 @@ def test_pytest_collection_modifyitems_rejects_invalid_shard_id():
 
     with pytest.raises(ValueError, match=r"shard_id=2 must be less than num_shards=2"):
         pytest_shard.pytest_collection_modifyitems(config, [])
+
+
+def test_pytest_report_collectionfinish_with_verbose_output():
+    config = SimpleNamespace(
+        option=SimpleNamespace(verbose=1),
+        getoption=lambda name: {"num_shards": 2}[name],
+    )
+    items = [MockItem("test_module.py::test_first"), MockItem("test_module.py::test_second")]
+
+    message = pytest_shard.pytest_report_collectionfinish(config, items)
+
+    assert message == (
+        "Running 2 items in this shard: test_module.py::test_first, test_module.py::test_second"
+    )

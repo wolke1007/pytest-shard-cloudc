@@ -1,23 +1,34 @@
 """Shard tests to support parallelism across multiple machines."""
 
 import hashlib
-from typing import Iterable, List, Sequence
+from collections.abc import Iterable, Sequence
 
-from _pytest import nodes  # for type checking only
+import pytest
 
 
-def positive_int(x) -> int:
+def non_negative_int(x: int | str) -> int:
     x = int(x)
     if x < 0:
+        raise ValueError(f"Argument {x} must be non-negative")
+    return x
+
+
+def positive_int(x: int | str) -> int:
+    x = int(x)
+    if x <= 0:
         raise ValueError(f"Argument {x} must be positive")
     return x
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     """Add pytest-shard specific configuration parameters."""
     group = parser.getgroup("shard")
     group.addoption(
-        "--shard-id", dest="shard_id", type=positive_int, default=0, help="Number of this shard."
+        "--shard-id",
+        dest="shard_id",
+        type=non_negative_int,
+        default=0,
+        help="Number of this shard.",
     )
     group.addoption(
         "--num-shards",
@@ -28,11 +39,11 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_report_collectionfinish(config, items: Sequence[nodes.Node]) -> str:
+def pytest_report_collectionfinish(config: pytest.Config, items: Sequence[pytest.Item]) -> str:
     """Log how many and, if verbose, which items are tested in this shard."""
     msg = f"Running {len(items)} items in this shard"
     if config.option.verbose > 0 and config.getoption("num_shards") > 1:
-        msg += ": " + ", ".join([item.nodeid for item in items])
+        msg += ": " + ", ".join(item.nodeid for item in items)
     return msg
 
 
@@ -41,19 +52,13 @@ def sha256hash(x: str) -> int:
 
 
 def filter_items_by_shard(
-    items: Iterable[nodes.Node], shard_id: int, num_shards: int
-) -> Sequence[nodes.Node]:
+    items: Iterable[pytest.Item], shard_id: int, num_shards: int
+) -> Sequence[pytest.Item]:
     """Computes `items` that should be tested in `shard_id` out of `num_shards` total shards."""
-    shards = [sha256hash(item.nodeid) % num_shards for item in items]
-
-    new_items = []
-    for shard, item in zip(shards, items):
-        if shard == shard_id:
-            new_items.append(item)
-    return new_items
+    return [item for item in items if sha256hash(item.nodeid) % num_shards == shard_id]
 
 
-def pytest_collection_modifyitems(config, items: List[nodes.Node]):
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Mutate the collection to consist of just items to be tested in this shard."""
     shard_id = config.getoption("shard_id")
     shard_total = config.getoption("num_shards")

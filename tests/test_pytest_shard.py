@@ -137,6 +137,27 @@ def test_load_durations(tmp_path):
     assert pytest_shard.load_durations(path) == data
 
 
+def test_load_durations_invalid_json(tmp_path):
+    path = tmp_path / ".test_durations"
+    path.write_text("not json {{{")
+    with pytest.raises(ValueError, match="not valid JSON"):
+        pytest_shard.load_durations(path)
+
+
+def test_load_durations_not_a_dict(tmp_path):
+    path = tmp_path / ".test_durations"
+    path.write_text(json.dumps([1, 2, 3]))
+    with pytest.raises(ValueError, match="must contain a JSON object"):
+        pytest_shard.load_durations(path)
+
+
+def test_load_durations_non_numeric_values(tmp_path):
+    path = tmp_path / ".test_durations"
+    path.write_text(json.dumps({"tests/test_foo.py::test_a": "fast"}))
+    with pytest.raises(ValueError, match="non-numeric duration values"):
+        pytest_shard.load_durations(path)
+
+
 def test_filter_items_by_duration_covers_all():
     items = [MockItem(f"test_{i}") for i in range(9)]
     durations = {f"test_{i}": float(i + 1) for i in range(9)}

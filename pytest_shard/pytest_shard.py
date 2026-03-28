@@ -171,7 +171,23 @@ def filter_items_round_robin(
 
 def load_durations(path: str | pathlib.Path) -> dict[str, float]:
     """Load a node-ID → duration (seconds) mapping from a JSON file."""
-    return json.loads(pathlib.Path(path).read_text())
+    path = pathlib.Path(path)
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"--durations-path={str(path)!r} is not valid JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"--durations-path={str(path)!r} must contain a JSON object "
+            f"(got {type(data).__name__})"
+        )
+    bad = {k: v for k, v in data.items() if not isinstance(v, (int, float))}
+    if bad:
+        examples = ", ".join(f"{k!r}: {v!r}" for k, v in list(bad.items())[:3])
+        raise ValueError(
+            f"--durations-path={str(path)!r} has non-numeric duration values: {examples}"
+        )
+    return data
 
 
 def filter_items_by_duration(

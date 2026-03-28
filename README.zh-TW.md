@@ -14,9 +14,9 @@
 ```mermaid
 flowchart LR
     A[收集整個測試套件] --> B[選擇 sharding mode]
-    B --> C[roundrobin<br/>依 node ID 排序後<br/>用 index mod N 分配]
-    B --> D[hash<br/>SHA-256(node ID) mod N]
-    B --> E[duration<br/>使用 .test_durations<br/>做 LPT bin-packing]
+    B --> C[roundrobin]
+    B --> D[hash]
+    B --> E[duration]
 
     C --> F[Shard 0]
     C --> G[Shard 1]
@@ -30,10 +30,14 @@ flowchart LR
     E --> G
     E --> H
 
-    F --> I[Worker / CI job 0]
-    G --> J[Worker / CI job 1]
-    H --> K[Worker / CI job N-1]
+    F --> I[Worker 或 CI job 0]
+    G --> J[Worker 或 CI job 1]
+    H --> K[Worker 或 CI job N-1]
 ```
+
+- `roundrobin`：先依 node ID 排序，再用 `index % num_shards` 分配
+- `hash`：用 `SHA-256(node_id) % num_shards` 分配
+- `duration`：使用 `.test_durations` 做 LPT bin-packing 分配
 
 ## 能做什麼
 

@@ -14,9 +14,9 @@
 ```mermaid
 flowchart LR
     A[Test suite collection] --> B[Choose sharding mode]
-    B --> C[roundrobin<br/>sort by node ID,<br/>assign by index mod N]
-    B --> D[hash<br/>SHA-256(node ID) mod N]
-    B --> E[duration<br/>LPT bin-packing using<br/>.test_durations]
+    B --> C[roundrobin]
+    B --> D[hash]
+    B --> E[duration]
 
     C --> F[Shard 0]
     C --> G[Shard 1]
@@ -30,10 +30,14 @@ flowchart LR
     E --> G
     E --> H
 
-    F --> I[Worker / CI job 0]
-    G --> J[Worker / CI job 1]
-    H --> K[Worker / CI job N-1]
+    F --> I[Worker or CI job 0]
+    G --> J[Worker or CI job 1]
+    H --> K[Worker or CI job N-1]
 ```
+
+- `roundrobin`: sort by node ID, then assign by `index % num_shards`
+- `hash`: assign by `SHA-256(node_id) % num_shards`
+- `duration`: assign by LPT bin-packing using `.test_durations`
 
 ## What it does
 

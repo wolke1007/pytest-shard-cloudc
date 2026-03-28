@@ -3,7 +3,7 @@ version: 2.1
 executors:
   my-executor:
     docker:
-      - image: cimg/python:3.13
+      - image: cimg/python:3.11
     environment:
       NUM_CPUS: 2  # more CPUs visible but we're throttled to 2, which breaks auto-detec
 
@@ -15,8 +15,3 @@ jobs:
       - checkout
       - run: python -m pip install -e .[dev]
       - run: nox --no-venv -s tests -s shard-0 -s shard-1 -s lint -s typing
-      - store_artifacts:
-          path: /tmp/test-reports
-          destination: test-reports
-      - store_test_results:
-          path: /tmp/test-reports

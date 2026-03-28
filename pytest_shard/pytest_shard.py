@@ -1,6 +1,8 @@
 """Shard tests to support parallelism across multiple machines."""
 
 import hashlib
+import json
+import pathlib
 from collections.abc import Iterable, Sequence
 
 import pytest
@@ -20,6 +22,41 @@ def positive_int(x: int | str) -> int:
     return x
 
 
+# ---------------------------------------------------------------------------
+# Duration recorder plugin
+# ---------------------------------------------------------------------------
+
+
+class _DurationRecorderPlugin:
+    """Collects per-test durations and writes them to a JSON file at session end.
+
+    Existing entries in the file are preserved; only tests that ran in this
+    session are overwritten. This makes it safe to run on a sharded subset —
+    merge multiple shard files afterward to obtain the full picture.
+    """
+
+    def __init__(self, path: pathlib.Path) -> None:
+        self._path = path
+        self._durations: dict[str, float] = {}
+
+    def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
+        if report.when == "call":
+            self._durations[report.nodeid] = report.duration
+
+    def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
+        existing: dict[str, float] = {}
+        if self._path.exists():
+            existing = json.loads(self._path.read_text())
+        existing.update(self._durations)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(json.dumps(existing, indent=2, sort_keys=True))
+
+
+# ---------------------------------------------------------------------------
+# pytest option registration
+# ---------------------------------------------------------------------------
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Add pytest-shard specific configuration parameters."""
     group = parser.getgroup("shard")
@@ -37,14 +74,70 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=1,
         help="Total number of shards.",
     )
+    group.addoption(
+        "--shard-mode",
+        dest="shard_mode",
+        choices=["roundrobin", "hash", "duration"],
+        default="roundrobin",
+        help=(
+            "Algorithm used to assign tests to shards. "
+            "'roundrobin' (default): sort by node ID then interleave, guarantees count balance. "
+            "'hash': SHA-256 hash of node ID, stateless and per-test stable. "
+            "'duration': greedy bin-packing by duration, requires --durations-path."
+        ),
+    )
+    group.addoption(
+        "--durations-path",
+        dest="durations_path",
+        default=".test_durations",
+        help=(
+            "Path to the JSON file used for reading or writing test durations. "
+            "Used when --shard-mode=duration (read) or --store-durations (write). "
+            "Compatible with the .test_durations format produced by pytest-split. "
+            "Defaults to .test_durations in the current directory."
+        ),
+    )
+    group.addoption(
+        "--store-durations",
+        dest="store_durations",
+        action="store_true",
+        default=False,
+        help=(
+            "Record each test's duration and write them to --durations-path at session end. "
+            "Existing entries are preserved; only tests that ran this session are overwritten. "
+            "When running sharded, each shard should write to its own path; merge the files "
+            "afterward to obtain complete duration data."
+        ),
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the duration recorder plugin when --store-durations is active."""
+    if config.getoption("store_durations", default=False):
+        path = pathlib.Path(config.getoption("durations_path", default=".test_durations"))
+        config.pluginmanager.register(
+            _DurationRecorderPlugin(path),
+            "_pytest_shard_duration_recorder",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Collection finish reporting
+# ---------------------------------------------------------------------------
 
 
 def pytest_report_collectionfinish(config: pytest.Config, items: Sequence[pytest.Item]) -> str:
     """Log how many and, if verbose, which items are tested in this shard."""
-    msg = f"Running {len(items)} items in this shard"
+    mode = config.getoption("shard_mode")
+    msg = f"Running {len(items)} items in this shard (mode: {mode})"
     if config.option.verbose > 0 and config.getoption("num_shards") > 1:
         msg += ": " + ", ".join(item.nodeid for item in items)
     return msg
+
+
+# ---------------------------------------------------------------------------
+# Sharding algorithms
+# ---------------------------------------------------------------------------
 
 
 def sha256hash(x: str) -> int:
@@ -54,15 +147,90 @@ def sha256hash(x: str) -> int:
 def filter_items_by_shard(
     items: Iterable[pytest.Item], shard_id: int, num_shards: int
 ) -> Sequence[pytest.Item]:
-    """Computes `items` that should be tested in `shard_id` out of `num_shards` total shards."""
+    """Hash mode: assign each test via SHA-256(node_id) % num_shards.
+
+    Stateless and per-test stable — adding or removing other tests never
+    changes which shard an existing test belongs to. Distribution is
+    statistically uniform but may be uneven for small test counts.
+    """
     return [item for item in items if sha256hash(item.nodeid) % num_shards == shard_id]
+
+
+def filter_items_round_robin(
+    items: Iterable[pytest.Item], shard_id: int, num_shards: int
+) -> Sequence[pytest.Item]:
+    """Round-robin mode: sort by node ID then assign by index % num_shards.
+
+    Guarantees that shard sizes differ by at most 1 regardless of test count.
+    Trade-off: adding or removing a test can shift the assignments of other
+    tests because the sort order changes.
+    """
+    sorted_items = sorted(items, key=lambda item: item.nodeid)
+    return [item for i, item in enumerate(sorted_items) if i % num_shards == shard_id]
+
+
+def load_durations(path: str | pathlib.Path) -> dict[str, float]:
+    """Load a node-ID → duration (seconds) mapping from a JSON file."""
+    return json.loads(pathlib.Path(path).read_text())
+
+
+def filter_items_by_duration(
+    items: Iterable[pytest.Item],
+    shard_id: int,
+    num_shards: int,
+    durations: dict[str, float],
+    default_duration: float = 1.0,
+) -> Sequence[pytest.Item]:
+    """Duration mode: greedy bin-packing (LPT) to minimise the longest shard.
+
+    Tests without a recorded duration are assigned `default_duration`.
+    Uses the Longest Processing Time (LPT) greedy algorithm: sort tests
+    by duration descending, then assign each to the shard with the
+    smallest accumulated time so far.
+    """
+    sorted_items = sorted(
+        items,
+        key=lambda item: durations.get(item.nodeid, default_duration),
+        reverse=True,
+    )
+
+    shard_times: list[float] = [0.0] * num_shards
+    shard_items: list[list[pytest.Item]] = [[] for _ in range(num_shards)]
+
+    for item in sorted_items:
+        duration = durations.get(item.nodeid, default_duration)
+        min_shard = min(range(num_shards), key=lambda i: shard_times[i])
+        shard_items[min_shard].append(item)
+        shard_times[min_shard] += duration
+
+    return shard_items[shard_id]
+
+
+# ---------------------------------------------------------------------------
+# pytest hook
+# ---------------------------------------------------------------------------
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Mutate the collection to consist of just items to be tested in this shard."""
     shard_id = config.getoption("shard_id")
-    shard_total = config.getoption("num_shards")
-    if shard_id >= shard_total:
-        raise ValueError(f"shard_id={shard_id} must be less than num_shards={shard_total}")
+    num_shards = config.getoption("num_shards")
+    shard_mode = config.getoption("shard_mode")
 
-    items[:] = filter_items_by_shard(items, shard_id, shard_total)
+    if shard_id >= num_shards:
+        raise ValueError(f"shard_id={shard_id} must be less than num_shards={num_shards}")
+
+    if shard_mode == "roundrobin":
+        items[:] = filter_items_round_robin(items, shard_id, num_shards)
+    elif shard_mode == "hash":
+        items[:] = filter_items_by_shard(items, shard_id, num_shards)
+    elif shard_mode == "duration":
+        durations_path = pathlib.Path(config.getoption("durations_path"))
+        if not durations_path.exists():
+            raise FileNotFoundError(
+                f"--shard-mode=duration requires a durations file. "
+                f"{str(durations_path)!r} not found. "
+                f"Run with --store-durations first to generate it."
+            )
+        durations = load_durations(durations_path)
+        items[:] = filter_items_by_duration(items, shard_id, num_shards, durations)

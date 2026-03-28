@@ -1,4 +1,4 @@
-[![PyPI version](https://badge.fury.io/py/pytest-shard.svg)](https://badge.fury.io/py/pytest-shard)
+[![PyPI version](https://badge.fury.io/py/pytest-shard-cloudc.svg)](https://badge.fury.io/py/pytest-shard-cloudc)
 
 [繁體中文](README.zh-TW.md) | **English**
 

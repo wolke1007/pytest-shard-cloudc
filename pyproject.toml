@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pytest-shard"
+name = "pytest-shard-cloudc"
 version = "0.1.2"
 description = "Shard tests to support parallelism across multiple machines."
 readme = "README.md"

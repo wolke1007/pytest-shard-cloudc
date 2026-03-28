@@ -232,7 +232,7 @@ allure open allure-report-demo30
 
 ![Allure Timeline — 3 個 shard，30 個測試，每個 1 秒](image/local_test_with_3_shards_30_cases.png)
 
-Timeline 以水平軌道呈現每個 shard。由於三個程序在相同的時間點同時啟動，所有軌道在 x 軸上的起始位置相同。最長的軌道（shard-0，13 個測試）決定了總耗時，約 **13 秒**，而循序執行需要 30 秒。
+Timeline 以水平軌道呈現每個 shard。由於三個程序在相同的時間點同時啟動，所有軌道在 x 軸上的起始位置相同。30 個測試平均分到 3 個 shard 後，每條軌道約為 **10 秒**，而循序執行則需要 30 秒。
 
 ---
 

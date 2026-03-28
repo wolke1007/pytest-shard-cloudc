@@ -117,7 +117,7 @@ def allure_merge(session: nox.Session) -> None:
 
 @nox.session(name="demo-10-shards", python=False)
 def demo_ten_shards(session: nox.Session) -> None:
-    """Run demo_tests/ across 10 shards and produce a merged Allure report."""
+    """Run demo/demo_tests/ across 10 shards and produce a merged Allure report."""
     demo_results = ALLURE_RESULTS_DIR / "demo"
     demo_report = ALLURE_REPORT_DIR.parent / "allure-report-demo"
     num_shards = 10
@@ -156,7 +156,7 @@ def demo_ten_shards(session: nox.Session) -> None:
 
 @nox.session(name="demo-3-shards-parallel", python=False)
 def demo_three_shards_parallel(session: nox.Session) -> None:
-    """Run demo30_tests/ across 3 shards in parallel processes and produce a merged Allure report."""
+    """Run demo/demo30_tests/ across 3 shards in parallel processes and produce a merged Allure report."""
     num_shards = 3
     demo_results = ALLURE_RESULTS_DIR / "demo30"
     demo_report = ALLURE_REPORT_DIR.parent / "allure-report-demo30"
@@ -281,7 +281,7 @@ def _merge_allure_results(results_root: pathlib.Path, report_dir: pathlib.Path, 
 
 @nox.session(name="demo-duration-comparison", python=False)
 def demo_duration_comparison(session: nox.Session) -> None:
-    """Two-run comparison demo using demo_duration_tests/.
+    """Two-run comparison demo using demo/demo_duration_tests/.
 
     Run 1 — round-robin (default): 3 parallel shards with unequal workloads.
       Each shard also records durations with --store-durations.

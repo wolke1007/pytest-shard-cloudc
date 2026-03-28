@@ -232,7 +232,7 @@ After opening the report, navigate to **Timeline** in the left sidebar.
 
 ![Allure Timeline — 3 shards, 30 tests, each 1 s](image/local_test_with_3_shards_30_cases.png)
 
-The Timeline shows each shard as a horizontal track. Because all three processes started at the same wall-clock time, the tracks begin at the same point on the x-axis. The longest track (shard-0, 13 tests) determines the total elapsed time — approximately **13 seconds** instead of the 30 seconds a sequential run would take.
+The Timeline shows each shard as a horizontal track. Because all three processes started at the same wall-clock time, the tracks begin at the same point on the x-axis. With 30 tests split evenly across 3 shards, each track is about **10 seconds** long instead of the 30 seconds a sequential run would take.
 
 ---
 

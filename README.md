@@ -9,6 +9,32 @@
 
 `pytest-shard` splits your test suite across multiple machines or CI workers at individual test-case granularity. By default it sorts tests by node ID and assigns them round-robin across shards, so parallelism works even when all tests live in a single file or a single parameterized method.
 
+## How It Works
+
+```mermaid
+flowchart LR
+    A[Test suite collection] --> B[Choose sharding mode]
+    B --> C[roundrobin<br/>sort by node ID,<br/>assign by index mod N]
+    B --> D[hash<br/>SHA-256(node ID) mod N]
+    B --> E[duration<br/>LPT bin-packing using<br/>.test_durations]
+
+    C --> F[Shard 0]
+    C --> G[Shard 1]
+    C --> H[Shard N-1]
+
+    D --> F
+    D --> G
+    D --> H
+
+    E --> F
+    E --> G
+    E --> H
+
+    F --> I[Worker / CI job 0]
+    G --> J[Worker / CI job 1]
+    H --> K[Worker / CI job N-1]
+```
+
 ## What it does
 
 | Capability | Description |

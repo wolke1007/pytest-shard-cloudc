@@ -9,6 +9,32 @@
 
 `pytest-shard` 會以個別測試案例為粒度，將測試套件分散到多台機器或 CI worker 上執行。預設會先依 node ID 排序，再以 round-robin 方式分配到各 shard，因此即使所有測試都在同一個檔案或同一個參數化方法中，也能實現平行化。
 
+## 運作示意
+
+```mermaid
+flowchart LR
+    A[收集整個測試套件] --> B[選擇 sharding mode]
+    B --> C[roundrobin<br/>依 node ID 排序後<br/>用 index mod N 分配]
+    B --> D[hash<br/>SHA-256(node ID) mod N]
+    B --> E[duration<br/>使用 .test_durations<br/>做 LPT bin-packing]
+
+    C --> F[Shard 0]
+    C --> G[Shard 1]
+    C --> H[Shard N-1]
+
+    D --> F
+    D --> G
+    D --> H
+
+    E --> F
+    E --> G
+    E --> H
+
+    F --> I[Worker / CI job 0]
+    G --> J[Worker / CI job 1]
+    H --> K[Worker / CI job N-1]
+```
+
 ## 能做什麼
 
 | 功能 | 說明 |

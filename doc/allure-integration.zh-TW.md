@@ -365,7 +365,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.11"
 
       - name: 安裝相依套件
         run: pip install -e .[dev]
@@ -415,7 +415,7 @@ jobs:
   test:
     parallelism: 3
     docker:
-      - image: cimg/python:3.13
+      - image: cimg/python:3.11
     steps:
       - checkout
       - run: pip install -e .[dev]
@@ -432,7 +432,7 @@ jobs:
 
   allure-report:
     docker:
-      - image: cimg/python:3.13
+      - image: cimg/python:3.11
     steps:
       - attach_workspace:
           at: .

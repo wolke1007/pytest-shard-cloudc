@@ -89,7 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.13" }
+        with: { python-version: "3.11" }
       - run: pip install pytest-shard
       - run: pytest --shard-id=${{ matrix.shard_id }} --num-shards=3
 ```

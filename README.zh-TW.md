@@ -189,6 +189,12 @@ pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards
 | `hash` | △（小樣本） | — | — | ✓ |
 | `duration` | — | ✓（最佳化） | ✓ | — |
 
+### 該選哪一種模式？
+
+- 如果你想要最穩妥的預設行為，並希望各 shard 的測試數量大致平均，選 `roundrobin`。
+- 如果你更在意每個測試的分配穩定性，而不是各 shard 的測試數量完全平均，例如希望測試集增減時某個既有測試仍留在同一個 shard，選 `hash`。
+- 如果測試執行時間差異很大，而且你更在意整體 wall-clock time 而不是每個 shard 的測試數量，選 `duration`。在成熟的 CI pipeline 中，只要你已有有效的 `.test_durations` 檔案，通常這會是最佳選項。
+
 ## 替代方案
 
 [pytest-xdist](https://github.com/pytest-dev/pytest-xdist) 可在單一機器上跨 CPU 核心平行執行測試，也支援遠端 worker。常見的搭配方式是：以 `pytest-shard` 將工作分散到各 CI node，再以 `pytest-xdist` 在各 node 內部進行核心級平行化。

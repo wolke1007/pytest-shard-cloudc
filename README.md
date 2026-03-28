@@ -189,6 +189,12 @@ pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards
 | `hash` | △ (small N) | — | — | ✓ |
 | `duration` | — | ✓ (optimal) | ✓ | — |
 
+### Which mode should you choose?
+
+- Choose `roundrobin` when you want the safest default and roughly equal test counts across shards.
+- Choose `hash` when per-test assignment stability matters more than perfectly even shard sizes, for example when you want a given test to stay on the same shard as the suite changes.
+- Choose `duration` when test runtimes vary a lot and total wall-clock time matters more than equal test counts. This is usually the best option for mature CI pipelines once you have a valid `.test_durations` file.
+
 ## Alternatives
 
 [pytest-xdist](https://github.com/pytest-dev/pytest-xdist) parallelizes tests across CPU cores on a single machine and supports remote workers. A common pattern is to combine both: use `pytest-shard` to split work across CI nodes, and `pytest-xdist` to parallelize within each node.

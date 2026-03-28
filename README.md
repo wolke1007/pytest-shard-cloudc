@@ -47,7 +47,12 @@ $ pip install pytest-shard
 
 ## Contributions
 
-Contributions are welcome. Test may be run using `tox`.
+Contributions are welcome. With Python 3.13, install the local development toolchain and run:
+
+```bash
+$ python -m pip install -e .[dev]
+$ nox --no-venv
+```
 
 ## License
 

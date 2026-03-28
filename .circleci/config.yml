@@ -3,7 +3,7 @@ version: 2.1
 executors:
   my-executor:
     docker:
-      - image: circleci/python:3.6
+      - image: cimg/python:3.13
     environment:
       NUM_CPUS: 2  # more CPUs visible but we're throttled to 2, which breaks auto-detec
 
@@ -13,8 +13,8 @@ jobs:
 
     steps:
       - checkout
-      - run: sudo pip install tox
-      - run: tox -p ${NUM_CPUS}
+      - run: python -m pip install -e .[dev]
+      - run: nox --no-venv -s tests -s shard-0 -s shard-1 -s lint -s typing
       - store_artifacts:
           path: /tmp/test-reports
           destination: test-reports

@@ -27,6 +27,15 @@ classifiers = [
   "Topic :: Software Development :: Testing",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "build",
+  "hypothesis",
+  "mypy",
+  "nox",
+  "ruff",
+]
+
 [project.urls]
 Homepage = "https://github.com/AdamGleave/pytest-shard"
 Repository = "https://github.com/AdamGleave/pytest-shard"
@@ -47,6 +56,9 @@ ignore = ["E203"]
 [tool.mypy]
 python_version = "3.13"
 files = ["pytest_shard"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover"]

@@ -132,7 +132,7 @@ def demo_ten_shards(session: nox.Session) -> None:
             f"--num-shards={num_shards}",
             f"--alluredir={shard_dir}",
             "-v",
-            "demo_tests",
+            "demo/demo_tests",
             external=True,
         )
 
@@ -180,7 +180,7 @@ def demo_three_shards_parallel(session: nox.Session) -> None:
                 f"--num-shards={num_shards}",
                 f"--alluredir={shard_dir}",
                 "-v",
-                "demo30_tests",
+                "demo/demo30_tests",
             ],
             stdout=log_file,
             stderr=subprocess.STDOUT,
@@ -304,7 +304,7 @@ def demo_duration_comparison(session: nox.Session) -> None:
     session.log("=== Run 1: round-robin (unbalanced) + --store-durations ===")
     _run_shards_parallel(
         session,
-        test_dir="demo_duration_tests",
+        test_dir="demo/demo_duration_tests",
         num_shards=num_shards,
         results_root=first_results,
         extra_args=["--shard-mode=roundrobin", "--store-durations"],
@@ -331,7 +331,7 @@ def demo_duration_comparison(session: nox.Session) -> None:
     session.log("=== Run 2: duration mode (balanced) ===")
     _run_shards_parallel(
         session,
-        test_dir="demo_duration_tests",
+        test_dir="demo/demo_duration_tests",
         num_shards=num_shards,
         results_root=second_results,
         extra_args=[

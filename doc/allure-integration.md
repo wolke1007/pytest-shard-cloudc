@@ -117,14 +117,14 @@ The following example runs **30 tests** (each simulating ~1 s of work) distribut
 **Test layout:**
 
 ```
-demo30_tests/
+demo/demo30_tests/
 ├── conftest.py          # adds 1 s to each test's call phase (not setup)
 ├── test_group_a.py      # 10 arithmetic tests
 ├── test_group_b.py      # 10 string tests
 └── test_group_c.py      # 10 collection tests
 ```
 
-**`demo30_tests/conftest.py`** — the key detail is using `pytest_runtest_call` instead of a fixture so that the delay is recorded by Allure as test-body duration (not setup):
+**`demo/demo30_tests/conftest.py`** — the key detail is using `pytest_runtest_call` instead of a fixture so that the delay is recorded by Allure as test-body duration (not setup):
 
 ```python
 import time
@@ -188,7 +188,7 @@ def demo_three_shards_parallel(session: nox.Session) -> None:
                 f"--shard-id={shard_id}",
                 f"--num-shards={num_shards}",
                 f"--alluredir={shard_dir}",
-                "-v", "demo30_tests",
+                "-v", "demo/demo30_tests",
             ],
             stdout=log_file,
             stderr=subprocess.STDOUT,
@@ -296,7 +296,7 @@ nox -s demo-duration-comparison
 # Run 1: each shard writes its own durations file
 _run_shards_parallel(
     session,
-    test_dir="demo_duration_tests",
+    test_dir="demo/demo_duration_tests",
     num_shards=3,
     results_root=first_results,
     extra_args=["--shard-mode=roundrobin", "--store-durations"],
@@ -315,7 +315,7 @@ durations_path.write_text(json.dumps(merged, indent=2, sort_keys=True))
 # Run 2: use merged durations for balanced sharding
 _run_shards_parallel(
     session,
-    test_dir="demo_duration_tests",
+    test_dir="demo/demo_duration_tests",
     num_shards=3,
     results_root=second_results,
     extra_args=["--shard-mode=duration", f"--durations-path={durations_path}"],

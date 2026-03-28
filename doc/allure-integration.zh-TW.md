@@ -34,7 +34,7 @@
 
 | 需求 | 版本 | 安裝方式 |
 |------|------|----------|
-| pytest-shard | ≥ 0.1.2 | `pip install pytest-shard` |
+| pytest-shard | ≥ 1.0.0 | `pip install pytest-shard-cloudc` |
 | allure-pytest | ≥ 2.13 | `pip install allure-pytest` |
 | Allure CLI | ≥ 2.20 | [Allure CLI 安裝指南](https://allurereport.org/docs/install/) |
 
@@ -69,7 +69,7 @@ pytest --shard-id=0               pytest --shard-id=1               pytest --sha
 ### 1. 安裝相依套件
 
 ```bash
-pip install pytest-shard allure-pytest
+pip install pytest-shard-cloudc allure-pytest
 # 另需安裝 Allure CLI：https://allurereport.org/docs/install/
 ```
 

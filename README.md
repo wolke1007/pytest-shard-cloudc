@@ -2,12 +2,14 @@
 
 [繁體中文](README.zh-TW.md) | **English**
 
-# pytest-shard
+# pytest-shard-cloudc
 
 > **This is a fork of [AdamGleave/pytest-shard](https://github.com/AdamGleave/pytest-shard) by [Cloud Chen](https://github.com/wolke1007).**
 > Modifications include: Allure report integration, multi-shard result merging, nox-based tooling, and modernized packaging with `pyproject.toml`.
 
 `pytest-shard` splits your test suite across multiple machines or CI workers at individual test-case granularity. By default it sorts tests by node ID and assigns them round-robin across shards, so parallelism works even when all tests live in a single file or a single parameterized method.
+
+Install from PyPI with `pip install pytest-shard-cloudc`.
 
 ## How It Works
 

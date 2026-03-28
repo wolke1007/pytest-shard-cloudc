@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-shard-cloudc"
-version = "0.1.2"
+version = "1.0.1"
 description = "Shard tests to support parallelism across multiple machines."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -46,7 +46,7 @@ Repository = "https://github.com/wolke1007/pytest-shard-cloudc"
 "Original Project" = "https://github.com/AdamGleave/pytest-shard"
 
 [project.entry-points.pytest11]
-pytest-shard = "pytest_shard.pytest_shard"
+pytest-shard-cloudc = "pytest_shard.pytest_shard"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pytest_shard"]

@@ -2,12 +2,14 @@
 
 **繁體中文** | [English](README.md)
 
-# pytest-shard
+# pytest-shard-cloudc
 
 > **本專案為 [Cloud Chen](https://github.com/wolke1007) fork 自 [AdamGleave/pytest-shard](https://github.com/AdamGleave/pytest-shard) 的修改版本。**
 > 主要改動包含：Allure report 整合、多 shard 結果合併、nox 工具鏈，以及以 `pyproject.toml` 為核心的現代化套件設定。
 
 `pytest-shard` 會以個別測試案例為粒度，將測試套件分散到多台機器或 CI worker 上執行。預設會先依 node ID 排序，再以 round-robin 方式分配到各 shard，因此即使所有測試都在同一個檔案或同一個參數化方法中，也能實現平行化。
+
+請使用 `pip install pytest-shard-cloudc` 從 PyPI 安裝。
 
 ## 運作示意
 

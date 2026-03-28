@@ -142,6 +142,23 @@ Uses a `.test_durations` JSON file (compatible with [pytest-split](https://githu
 
 Tests are assigned using the **Longest Processing Time (LPT)** greedy algorithm: sort by duration descending, then place each test into the shard with the smallest accumulated time. Tests with no recorded duration default to 1.0 s.
 
+### Recording `.test_durations`
+
+Use `--store-durations` to record each test's call-phase duration and write it at session end:
+
+```bash
+# Write to .test_durations in the current directory
+pytest tests --store-durations
+
+# Write to a custom path
+pytest tests --store-durations --durations-path=artifacts/test_durations.json
+```
+
+- `--store-durations` enables duration recording for the current run.
+- `--durations-path=PATH` controls where the JSON file is written or read from. The default is `.test_durations`.
+- Existing entries in the file are preserved; tests executed in the current run overwrite only their own entries.
+- When running shards in parallel, each shard should write to its own file, then you merge them before using `--shard-mode=duration`.
+
 | Mode | Count balance | Time balance | Needs data file | Per-test stable |
 |------|:---:|:---:|:---:|:---:|
 | `roundrobin` | ✓ (exact) | — | — | — |

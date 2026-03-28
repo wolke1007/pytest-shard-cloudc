@@ -173,6 +173,16 @@ Running 7 items in this shard (mode: roundrobin)
 Running 7 items in this shard (mode: roundrobin): tests/test_foo.py::test_a, ...
 ```
 
+### Duration 模式的前置條件
+
+`--shard-mode=duration` 需要 `--durations-path` 指向的檔案事先存在。
+如果檔案不存在，請先用 `--store-durations` 跑一次一般測試，例如：
+
+```bash
+pytest tests --store-durations --durations-path=.test_durations
+pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards=3 --shard-id=0
+```
+
 | 模式 | 數量平衡 | 時間平衡 | 需要資料檔 | 每測試穩定 |
 |------|:---:|:---:|:---:|:---:|
 | `roundrobin` | ✓（精確） | — | — | — |

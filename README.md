@@ -173,6 +173,16 @@ Pass `-v` to also list every test node ID assigned to this shard:
 Running 7 items in this shard (mode: roundrobin): tests/test_foo.py::test_a, ...
 ```
 
+### Duration mode prerequisite
+
+`--shard-mode=duration` requires the file pointed to by `--durations-path` to already exist.
+If the file is missing, run a normal test pass with `--store-durations` first, for example:
+
+```bash
+pytest tests --store-durations --durations-path=.test_durations
+pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards=3 --shard-id=0
+```
+
 | Mode | Count balance | Time balance | Needs data file | Per-test stable |
 |------|:---:|:---:|:---:|:---:|
 | `roundrobin` | ✓ (exact) | — | — | — |

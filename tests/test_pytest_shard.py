@@ -264,6 +264,19 @@ def test_duration_recorder_overwrites_updated_test(tmp_path):
     assert json.loads(path.read_text())["tests/test_foo.py::test_a"] == 1.0
 
 
+def test_duration_recorder_rejects_invalid_existing_json(tmp_path):
+    path = tmp_path / ".test_durations"
+    path.write_text("not json {{{")
+
+    plugin = pytest_shard._DurationRecorderPlugin(path)
+    plugin.pytest_runtest_logreport(
+        MockReport(when="call", nodeid="tests/test_foo.py::test_a", duration=1.0)
+    )
+
+    with pytest.raises(ValueError, match="not valid JSON"):
+        plugin.pytest_sessionfinish(SimpleNamespace(), 0)
+
+
 # ---------------------------------------------------------------------------
 # pytest_collection_modifyitems
 # ---------------------------------------------------------------------------

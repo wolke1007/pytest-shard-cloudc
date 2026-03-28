@@ -46,7 +46,7 @@ class _DurationRecorderPlugin:
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
         existing: dict[str, float] = {}
         if self._path.exists():
-            existing = json.loads(self._path.read_text())
+            existing = load_durations(self._path)
         existing.update(self._durations)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(existing, indent=2, sort_keys=True))

@@ -2,6 +2,7 @@
 
 import collections
 import itertools
+from types import SimpleNamespace
 
 import hypothesis
 from hypothesis import strategies
@@ -36,7 +37,7 @@ def test_sha256hash_deterministic(s):
     x = pytest_shard.sha256hash(s)
     y = pytest_shard.sha256hash(s)
     assert x == y
-    assert type(x) == int
+    assert isinstance(x, int)
 
 
 @hypothesis.given(strategies.text(), strategies.text())
@@ -62,3 +63,10 @@ def test_filter_items_by_shard(names, num_shards):
     all_filtered = list(itertools.chain(*filtered))
     assert len(all_filtered) == len(items)
     assert set(all_filtered) == set(items)
+
+
+def test_pytest_collection_modifyitems_rejects_invalid_shard_id():
+    config = SimpleNamespace(getoption=lambda name: {"shard_id": 2, "num_shards": 2}[name])
+
+    with pytest.raises(ValueError, match=r"shard_id=2 must be less than num_shards=2"):
+        pytest_shard.pytest_collection_modifyitems(config, [])

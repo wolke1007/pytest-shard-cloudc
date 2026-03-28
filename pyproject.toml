@@ -41,8 +41,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/wolke1007/pytest-shard"
-Repository = "https://github.com/wolke1007/pytest-shard"
+Homepage = "https://github.com/wolke1007/pytest-shard-cloudc"
+Repository = "https://github.com/wolke1007/pytest-shard-cloudc"
 "Original Project" = "https://github.com/AdamGleave/pytest-shard"
 
 [project.entry-points.pytest11]

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
 authors = [
-  { name = "Adam Gleave" },
+  { name = "Cloud Chen", email = "wolke1007@users.noreply.github.com" },
 ]
 dependencies = [
   "pytest",
@@ -38,8 +38,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AdamGleave/pytest-shard"
-Repository = "https://github.com/AdamGleave/pytest-shard"
+Homepage = "https://github.com/wolke1007/pytest-shard"
+Repository = "https://github.com/wolke1007/pytest-shard"
+"Original Project" = "https://github.com/AdamGleave/pytest-shard"
 
 [project.entry-points.pytest11]
 pytest-shard = "pytest_shard.pytest_shard"

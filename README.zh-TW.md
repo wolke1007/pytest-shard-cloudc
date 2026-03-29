@@ -13,7 +13,7 @@
 
 ## 運作示意
 
-更容易理解的分開圖解，請直接參考 [分派模式指南](doc/sharding-modes.zh-TW.md) 中 `roundrobin`、`hash`、`duration` 各自的示意圖。
+更完整的圖解與取捨說明，請直接參考 [分派模式指南](doc/sharding-modes.zh-TW.md) 中四種模式：`roundrobin`、`hash`、`hash-balanced`、`duration`。
 
 ## 能做什麼
 
@@ -32,7 +32,7 @@
 
 | 指南 | 說明 |
 |------|------|
-| [分派模式指南](doc/sharding-modes.zh-TW.md) | 詳細說明 `roundrobin`、`hash`、`duration` 的行為、`.test_durations` 用法、verbose shard 報告，以及模式選擇策略。 |
+| [分派模式指南](doc/sharding-modes.zh-TW.md) | 詳細說明 `roundrobin`、`hash`、`hash-balanced`、`duration` 的行為、`.test_durations` 用法、verbose shard 報告，以及模式選擇策略。 |
 | [Demo Sessions](doc/demo-sessions.zh-TW.md) | 說明貢獻者如何用 `nox` 執行內建 demo 測試。 |
 | [Allure Report 整合指南](doc/allure-integration.zh-TW.md) | 說明如何跨 shard 收集 Allure 結果並合併成單一報告、在本機平行執行 shard，以及整合 GitHub Actions / CircleCI。包含 30 個測試、3 個平行 shard 的完整範例與 Timeline 截圖。 |
 
@@ -68,7 +68,7 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=roundrobin
 # Hash — 每個測試的歸屬穩定，無狀態
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash
 
-# Hash-balanced — 對 xdist_group 使用 LPT bin-packing，避免 group 碰撞
+# Hash-balanced — 依測試數量貪婪地分散 xdist_group；ungrouped 測試仍用 hash
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash-balanced
 
 # Duration — 依歷史執行時間做 bin-packing，最小化最慢 shard
@@ -76,6 +76,13 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=duration --durations-path=.test_
 ```
 
 更完整的模式比較、`.test_durations` 產生方式與選擇建議，請參考 [分派模式指南](doc/sharding-modes.zh-TW.md)。
+
+### 一開始該選哪個模式？
+
+- 如果你想要最穩妥的預設值，且不想先準備任何額外資料，選 `roundrobin`。
+- 如果你最在意每個測試的歸屬穩定性，或你使用 `xdist_group` 但不需要重新平衡大型 group，選 `hash`。
+- 如果你有兩個以上的大型 `xdist_group`，想降低它們碰撞到同一 shard 的機率，選 `hash-balanced`。
+- 如果測試執行時間差異很大，而且你已經有可用的 `.test_durations` 檔案，選 `duration`。
 
 ### GitHub Actions 範例
 

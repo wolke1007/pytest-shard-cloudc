@@ -13,7 +13,7 @@ Install from PyPI with `pip install pytest-shard-cloudc`.
 
 ## How It Works
 
-See [Sharding Modes](doc/sharding-modes.md) for separate diagrams that explain how `roundrobin`, `hash`, and `duration` assign tests to shards.
+See [Sharding Modes](doc/sharding-modes.md) for diagrams and trade-offs covering all four modes: `roundrobin`, `hash`, `hash-balanced`, and `duration`.
 
 ## What it does
 
@@ -32,7 +32,7 @@ See [Sharding Modes](doc/sharding-modes.md) for separate diagrams that explain h
 
 | Guide | Description |
 |-------|-------------|
-| [Sharding Modes](doc/sharding-modes.md) | Detailed behavior of `roundrobin`, `hash`, and `duration`, including `.test_durations`, verbose shard reports, and mode selection guidance. |
+| [Sharding Modes](doc/sharding-modes.md) | Detailed behavior of `roundrobin`, `hash`, `hash-balanced`, and `duration`, including `.test_durations`, verbose shard reports, and mode selection guidance. |
 | [Demo Sessions](doc/demo-sessions.md) | How contributors can run the bundled demo suites locally with `nox`. |
 | [Allure Report Integration](doc/allure-integration.md) | How to collect Allure results across shards, merge them into one report, run shards in parallel locally, and integrate with GitHub Actions / CircleCI. Includes a worked example with 30 tests across 3 parallel shards and a Timeline screenshot. |
 
@@ -68,7 +68,7 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=roundrobin
 # Hash — per-test stable assignment, stateless
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash
 
-# Hash-balanced — LPT bin-packing for xdist_group groups, prevents group collision
+# Hash-balanced — greedily spreads xdist_group groups by test count; ungrouped tests still use hash
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash-balanced
 
 # Duration — bin-packing by recorded test times, minimises longest shard
@@ -76,6 +76,13 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=duration --durations-path=.test_
 ```
 
 See [Sharding Modes](doc/sharding-modes.md) for detailed trade-offs, `.test_durations` generation, and mode selection guidance.
+
+### Which mode should you start with?
+
+- Use `roundrobin` if you want the safest default and roughly even test counts with no extra setup.
+- Use `hash` if per-test stability matters most, or if you rely on `xdist_group` and want group co-location without rebalancing.
+- Use `hash-balanced` if you have two or more large `xdist_group` groups and want to reduce large-group collisions across shards.
+- Use `duration` if test runtimes vary a lot and you already have a valid `.test_durations` file.
 
 ### GitHub Actions example
 

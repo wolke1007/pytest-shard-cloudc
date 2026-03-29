@@ -6,7 +6,7 @@ This guide explains how each `pytest-shard` mode behaves, how to generate `.test
 
 ## Available modes
 
-Three modes are available via `--shard-mode`:
+Four modes are available via `--shard-mode`:
 
 ### `roundrobin` (default)
 
@@ -130,9 +130,7 @@ nox -s demo-xdist-group-hash
 allure open allure-report-xdist-group
 ```
 
-Navigate to **Timeline** in the left sidebar. All tests with the same `xdist_group` appear on the same thread (shard process):
-
-![Allure Timeline — xdist_group co-location, 3 shards, hash mode](image/xdist_group_hash_timeline.png)
+Navigate to **Timeline** in the left sidebar. All tests with the same `xdist_group` appear on the same thread (shard process).
 
 The demo runs 17 tests across 3 shards:
 

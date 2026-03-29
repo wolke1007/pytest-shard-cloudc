@@ -6,7 +6,7 @@
 
 ## 可用模式
 
-透過 `--shard-mode` 可選擇三種模式：
+透過 `--shard-mode` 可選擇四種模式：
 
 ### `roundrobin`（預設）
 
@@ -130,9 +130,7 @@ nox -s demo-xdist-group-hash
 allure open allure-report-xdist-group
 ```
 
-在左側選單點選 **Timeline**，即可看到相同 `xdist_group` 的測試都出現在同一條執行緒（同一個 shard 程序）上：
-
-![Allure Timeline — xdist_group 同 shard，3 個 shard，hash 模式](image/xdist_group_hash_timeline.png)
+在左側選單點選 **Timeline**，即可看到相同 `xdist_group` 的測試都出現在同一條執行緒（同一個 shard 程序）上。
 
 此 demo 共 17 個測試分配至 3 個 shard：
 

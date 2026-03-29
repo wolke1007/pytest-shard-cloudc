@@ -20,7 +20,8 @@ See [Sharding Modes](doc/sharding-modes.md) for separate diagrams that explain h
 | Capability | Description |
 |------------|-------------|
 | **Round-robin sharding** (default) | Sorts tests by node ID and interleaves across shards, guaranteeing shard counts differ by at most 1 |
-| **Hash-based sharding** | Assigns each test deterministically via `SHA-256(node_id) % N` — per-test stable even as the suite grows |
+| **Hash-based sharding** | Assigns each test deterministically via `SHA-256(node_id) % N` — per-test stable even as the suite grows; respects `xdist_group` co-location |
+| **Hash-balanced sharding** | LPT bin-packing for `xdist_group` groups prevents collision; ungrouped tests use hash; deterministic for the same test collection |
 | **Duration-based sharding** | Greedy bin-packing using a `.test_durations` file (compatible with pytest-split) to minimise the longest shard |
 | **Zero configuration** | Just add `--shard-id` and `--num-shards` — no config files, no test ordering required |
 | **Any granularity** | Splits at the individual test level, not at the file or class level |
@@ -66,6 +67,9 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=roundrobin
 
 # Hash — per-test stable assignment, stateless
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash
+
+# Hash-balanced — LPT bin-packing for xdist_group groups, prevents group collision
+pytest --shard-id=0 --num-shards=3 --shard-mode=hash-balanced
 
 # Duration — bin-packing by recorded test times, minimises longest shard
 pytest --shard-id=0 --num-shards=3 --shard-mode=duration --durations-path=.test_durations

@@ -3,6 +3,7 @@
 import hashlib
 import json
 import pathlib
+import warnings
 from collections.abc import Iterable, Sequence
 
 import pytest
@@ -77,12 +78,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption(
         "--shard-mode",
         dest="shard_mode",
-        choices=["roundrobin", "hash", "duration"],
+        choices=["roundrobin", "hash", "hash-balanced", "duration"],
         default="roundrobin",
         help=(
             "Algorithm used to assign tests to shards. "
             "'roundrobin' (default): sort by node ID then interleave, guarantees count balance. "
             "'hash': SHA-256 hash of node ID, stateless and per-test stable. "
+            "'hash-balanced': LPT bin-packing for xdist_group groups to avoid collision, "
+            "hash by node ID for ungrouped tests; deterministic for the same test collection. "
             "'duration': greedy bin-packing by duration, requires --durations-path."
         ),
     )
@@ -144,16 +147,120 @@ def sha256hash(x: str) -> int:
     return int.from_bytes(hashlib.sha256(x.encode()).digest(), "little")
 
 
+def _hash_key_for_item(item: pytest.Item) -> str:
+    """Return the hash key for an item: xdist_group name if present, else node ID.
+
+    In hash mode, tests sharing an xdist_group are guaranteed to land on the
+    same shard. This respects the grouping intent already declared via
+    pytest-xdist markers.
+
+    Supports both argument forms:
+      @pytest.mark.xdist_group("name")        — positional
+      @pytest.mark.xdist_group(name="name")   — keyword
+    """
+    marker = item.get_closest_marker("xdist_group")
+    if marker:
+        group_name = (
+            marker.args[0]
+            if marker.args
+            else marker.kwargs.get("name", "")
+        )
+        if group_name:
+            return f"xdist_group:{group_name}"
+    return item.nodeid
+
+
 def filter_items_by_shard(
     items: Iterable[pytest.Item], shard_id: int, num_shards: int
 ) -> Sequence[pytest.Item]:
-    """Hash mode: assign each test via SHA-256(node_id) % num_shards.
+    """Hash mode: assign each test via SHA-256(hash_key) % num_shards.
+
+    The hash key is the xdist_group name (if the test carries that marker) or
+    the node ID. Tests sharing an xdist_group are therefore guaranteed to land
+    on the same shard.
 
     Stateless and per-test stable — adding or removing other tests never
     changes which shard an existing test belongs to. Distribution is
-    statistically uniform but may be uneven for small test counts.
+    statistically uniform but may be uneven for small test counts or large
+    xdist_groups.
     """
-    return [item for item in items if sha256hash(item.nodeid) % num_shards == shard_id]
+    result = [
+        item
+        for item in items
+        if sha256hash(_hash_key_for_item(item)) % num_shards == shard_id
+    ]
+    _warn_if_group_dominates_shard(result)
+    return result
+
+
+def _warn_if_group_dominates_shard(
+    items: Sequence[pytest.Item], threshold: float = 0.5
+) -> None:
+    """Warn when a single xdist_group accounts for more than threshold of shard items."""
+    if len(items) < 2:
+        return
+    group_counts: dict[str, int] = {}
+    for item in items:
+        key = _hash_key_for_item(item)
+        if key.startswith("xdist_group:"):
+            group_name = key[len("xdist_group:"):]
+            group_counts[group_name] = group_counts.get(group_name, 0) + 1
+    total = len(items)
+    for group_name, count in group_counts.items():
+        if count / total > threshold:
+            warnings.warn(
+                f"xdist_group {group_name!r} accounts for {count}/{total} tests "
+                f"({count / total:.0%}) in this shard, which may cause uneven shard sizes.",
+                stacklevel=3,
+            )
+
+
+def filter_items_by_shard_group_balanced(
+    items: Iterable[pytest.Item], shard_id: int, num_shards: int
+) -> Sequence[pytest.Item]:
+    """Hash-balanced mode: LPT bin-packing for xdist_group groups, hash for the rest.
+
+    Groups (tests sharing an xdist_group marker) are treated as atomic units and
+    assigned to shards using the Longest Processing Time (LPT) greedy algorithm:
+    sort groups by size descending (name ascending as tiebreaker), then assign
+    each group to the shard with the fewest tests so far. This prevents multiple
+    large groups from colliding on the same shard.
+
+    Ungrouped tests (no xdist_group marker) are assigned via SHA-256(node_id) %
+    num_shards, identical to plain hash mode.
+
+    Deterministic: given the same test collection, every shard process computes the
+    same global assignment table independently and filters to its own subset — no
+    inter-process coordination is needed, and there is no risk of overlap or gaps.
+    """
+    items_list = list(items)
+
+    grouped: dict[str, list[pytest.Item]] = {}
+    ungrouped: list[pytest.Item] = []
+    for item in items_list:
+        key = _hash_key_for_item(item)
+        if key.startswith("xdist_group:"):
+            group_name = key[len("xdist_group:"):]
+            grouped.setdefault(group_name, []).append(item)
+        else:
+            ungrouped.append(item)
+
+    # Sort by size desc, name asc as tiebreaker — fully deterministic
+    sorted_groups = sorted(grouped.items(), key=lambda x: (-len(x[1]), x[0]))
+
+    shard_counts = [0] * num_shards
+    shard_items: list[list[pytest.Item]] = [[] for _ in range(num_shards)]
+
+    for _group_name, group_items in sorted_groups:
+        target = min(range(num_shards), key=lambda i: shard_counts[i])
+        shard_items[target].extend(group_items)
+        shard_counts[target] += len(group_items)
+
+    for item in ungrouped:
+        target = sha256hash(item.nodeid) % num_shards
+        shard_items[target].append(item)
+
+    return shard_items[shard_id]
 
 
 def filter_items_round_robin(
@@ -240,6 +347,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         items[:] = filter_items_round_robin(items, shard_id, num_shards)
     elif shard_mode == "hash":
         items[:] = filter_items_by_shard(items, shard_id, num_shards)
+    elif shard_mode == "hash-balanced":
+        items[:] = filter_items_by_shard_group_balanced(items, shard_id, num_shards)
     elif shard_mode == "duration":
         durations_path = pathlib.Path(config.getoption("durations_path"))
         if not durations_path.exists():

@@ -15,8 +15,31 @@ from pytest_shard import pytest_shard
 # Helpers
 # ---------------------------------------------------------------------------
 
-MockItem = collections.namedtuple("MockItem", "nodeid")
+class MockItem(collections.namedtuple("_MockItemBase", "nodeid")):
+    """Minimal pytest.Item stand-in with no xdist_group marker."""
+
+    def get_closest_marker(self, name: str):
+        return None
+
+
+MockMarker = collections.namedtuple("MockMarker", ["args", "kwargs"])
 MockReport = collections.namedtuple("MockReport", ["when", "nodeid", "duration"])
+
+
+class MockItemWithMarker(MockItem):
+    """MockItem that returns a single marker for 'xdist_group'."""
+
+    _marker: MockMarker
+
+    def __new__(cls, nodeid: str, marker: MockMarker):
+        obj = super().__new__(cls, nodeid)
+        obj._marker = marker  # type: ignore[misc]
+        return obj
+
+    def get_closest_marker(self, name: str):
+        if name == "xdist_group":
+            return self._marker
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -322,3 +345,242 @@ def test_pytest_report_collectionfinish_with_verbose_output():
         "Running 2 items in this shard (mode: roundrobin): "
         "test_module.py::test_first, test_module.py::test_second"
     )
+
+
+# ---------------------------------------------------------------------------
+# _hash_key_for_item
+# ---------------------------------------------------------------------------
+
+
+def test_hash_key_no_marker_returns_nodeid():
+    item = MockItem("tests/test_foo.py::test_a")
+    assert pytest_shard._hash_key_for_item(item) == "tests/test_foo.py::test_a"
+
+
+def test_hash_key_xdist_group_positional():
+    marker = MockMarker(args=("my_group",), kwargs={})
+    item = MockItemWithMarker("tests/test_foo.py::test_a", marker)
+    assert pytest_shard._hash_key_for_item(item) == "xdist_group:my_group"
+
+
+def test_hash_key_xdist_group_keyword():
+    marker = MockMarker(args=(), kwargs={"name": "my_group"})
+    item = MockItemWithMarker("tests/test_foo.py::test_a", marker)
+    assert pytest_shard._hash_key_for_item(item) == "xdist_group:my_group"
+
+
+def test_hash_key_xdist_group_empty_name_falls_back_to_nodeid():
+    """xdist_group with no usable name should fall back to node ID."""
+    marker = MockMarker(args=(), kwargs={})
+    item = MockItemWithMarker("tests/test_foo.py::test_a", marker)
+    assert pytest_shard._hash_key_for_item(item) == "tests/test_foo.py::test_a"
+
+
+# ---------------------------------------------------------------------------
+# Hash mode: xdist_group grouping guarantees
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_same_xdist_group_lands_on_same_shard():
+    """All items sharing an xdist_group must end up on exactly one shard."""
+    marker = MockMarker(args=("group_a",), kwargs={})
+    items = [MockItemWithMarker(f"tests/test_{i}.py::test_x", marker) for i in range(6)]
+    num_shards = 4
+
+    shard_results = [
+        pytest_shard.filter_items_by_shard(items, shard_id=i, num_shards=num_shards)
+        for i in range(num_shards)
+    ]
+    non_empty = [r for r in shard_results if r]
+    assert len(non_empty) == 1, "all items in the same xdist_group must land on one shard"
+    assert set(non_empty[0]) == set(items)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_parametrize_with_xdist_group_same_shard():
+    """Parametrized variants sharing an xdist_group must all land on the same shard."""
+    marker = MockMarker(args=("param_group",), kwargs={})
+    items = [
+        MockItemWithMarker(f"tests/test_foo.py::test_a[{p}]", marker)
+        for p in ["x", "y", "z", "w"]
+    ]
+    num_shards = 3
+
+    shard_results = [
+        pytest_shard.filter_items_by_shard(items, shard_id=i, num_shards=num_shards)
+        for i in range(num_shards)
+    ]
+    non_empty = [r for r in shard_results if r]
+    assert len(non_empty) == 1
+    assert set(non_empty[0]) == set(items)
+
+
+def test_no_xdist_group_hash_behavior_unchanged():
+    """Items without xdist_group must be distributed as before (regression guard)."""
+    items = [MockItem(f"test_{i}") for i in range(20)]
+    num_shards = 4
+    filtered = [
+        pytest_shard.filter_items_by_shard(items, shard_id=i, num_shards=num_shards)
+        for i in range(num_shards)
+    ]
+    all_filtered = list(itertools.chain(*filtered))
+    assert len(all_filtered) == len(items)
+    assert set(all_filtered) == set(items)
+
+
+# ---------------------------------------------------------------------------
+# _warn_if_group_dominates_shard
+# ---------------------------------------------------------------------------
+
+
+def test_group_size_warning_emitted_when_over_threshold():
+    marker = MockMarker(args=("big_group",), kwargs={})
+    # 4 items in big_group + 1 item without = big_group is 80 % → over 50 % threshold
+    items = [MockItemWithMarker(f"tests/test_{i}.py::test_x", marker) for i in range(4)]
+    items.append(MockItem("tests/test_other.py::test_y"))
+
+    with pytest.warns(UserWarning, match="big_group"):
+        pytest_shard._warn_if_group_dominates_shard(items)
+
+
+def test_group_size_warning_not_emitted_when_under_threshold():
+    marker = MockMarker(args=("small_group",), kwargs={})
+    # 2 items in small_group + 5 others = 28 % → under threshold
+    group_items = [MockItemWithMarker(f"tests/test_{i}.py::test_x", marker) for i in range(2)]
+    other_items = [MockItem(f"tests/test_other_{i}.py::test_y") for i in range(5)]
+    items = group_items + other_items
+
+    import warnings as _warnings
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error")
+        pytest_shard._warn_if_group_dominates_shard(items)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Hash-balanced mode: filter_items_by_shard_group_balanced
+# ---------------------------------------------------------------------------
+
+
+def _make_group_items(group_name: str, count: int) -> list[MockItemWithMarker]:
+    marker = MockMarker(args=(group_name,), kwargs={})
+    return [MockItemWithMarker(f"tests/test_{group_name}_{i}.py::test_x", marker) for i in range(count)]
+
+
+def test_hash_balanced_covers_all_items():
+    """Every item must appear in exactly one shard (no overlap, no gap)."""
+    items = (
+        _make_group_items("database", 5)
+        + _make_group_items("auth", 4)
+        + _make_group_items("cache", 4)
+        + [MockItem(f"tests/test_standalone_{i}.py::test_x") for i in range(4)]
+    )
+    num_shards = 3
+    all_results = list(itertools.chain.from_iterable(
+        pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=i, num_shards=num_shards)
+        for i in range(num_shards)
+    ))
+    assert len(all_results) == len(items)
+    assert set(all_results) == set(items)
+
+
+def test_hash_balanced_groups_stay_together():
+    """All tests in the same xdist_group must land on the same shard."""
+    items = (
+        _make_group_items("database", 5)
+        + _make_group_items("auth", 4)
+        + _make_group_items("cache", 4)
+    )
+    num_shards = 3
+
+    for group_name in ("database", "auth", "cache"):
+        marker = MockMarker(args=(group_name,), kwargs={})
+        group_items = set(
+            item for item in items
+            if isinstance(item, MockItemWithMarker) and item._marker == marker
+        )
+        shards_containing_group = [
+            i for i in range(num_shards)
+            if set(pytest_shard.filter_items_by_shard_group_balanced(
+                items, shard_id=i, num_shards=num_shards
+            )) & group_items
+        ]
+        assert len(shards_containing_group) == 1, (
+            f"group '{group_name}' must land on exactly one shard, got {shards_containing_group}"
+        )
+
+
+def test_hash_balanced_is_deterministic():
+    """Same input must always produce the same assignment across multiple calls."""
+    items = (
+        _make_group_items("database", 5)
+        + _make_group_items("auth", 4)
+        + _make_group_items("cache", 4)
+        + [MockItem(f"tests/test_standalone_{i}.py::test_x") for i in range(4)]
+    )
+    num_shards = 3
+
+    first_run = [
+        pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=i, num_shards=num_shards)
+        for i in range(num_shards)
+    ]
+    second_run = [
+        pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=i, num_shards=num_shards)
+        for i in range(num_shards)
+    ]
+    assert first_run == second_run, "hash-balanced must be deterministic for the same input"
+
+
+def test_hash_balanced_large_groups_on_different_shards():
+    """Two groups larger than 1/num_shards of total tests must not share a shard."""
+    # database(5) and auth(4) would both hash to shard 0 in plain hash mode.
+    # hash-balanced must separate them.
+    items = (
+        _make_group_items("database", 5)
+        + _make_group_items("auth", 4)
+        + _make_group_items("cache", 4)
+    )
+    num_shards = 3
+
+    shard_results = [
+        set(pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=i, num_shards=num_shards))
+        for i in range(num_shards)
+    ]
+
+    database_items = set(_make_group_items("database", 5))
+    auth_items = set(_make_group_items("auth", 4))
+
+    database_shard = next(i for i, s in enumerate(shard_results) if database_items <= s)
+    auth_shard = next(i for i, s in enumerate(shard_results) if auth_items <= s)
+
+    assert database_shard != auth_shard, (
+        "database and auth are the two largest groups and must land on different shards"
+    )
+
+
+def test_hash_balanced_no_groups_behaves_like_hash():
+    """With no xdist_group markers, hash-balanced must produce the same result as hash."""
+    items = [MockItem(f"test_{i}") for i in range(20)]
+    num_shards = 4
+
+    balanced_results = [
+        set(pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=i, num_shards=num_shards))
+        for i in range(num_shards)
+    ]
+    hash_results = [
+        set(pytest_shard.filter_items_by_shard(items, shard_id=i, num_shards=num_shards))
+        for i in range(num_shards)
+    ]
+    assert balanced_results == hash_results
+
+
+def test_hash_balanced_all_grouped_covers_all():
+    """When every item has an xdist_group, all items must still be covered."""
+    items = _make_group_items("alpha", 3) + _make_group_items("beta", 3) + _make_group_items("gamma", 3)
+    num_shards = 3
+    all_results = list(itertools.chain.from_iterable(
+        pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=i, num_shards=num_shards)
+        for i in range(num_shards)
+    ))
+    assert set(all_results) == set(items)
+    assert len(all_results) == len(items)

@@ -279,6 +279,61 @@ def _merge_allure_results(results_root: pathlib.Path, report_dir: pathlib.Path, 
     )
 
 
+@nox.session(name="demo-xdist-group-hash-balanced", python=False)
+def demo_xdist_group_hash_balanced(session: nox.Session) -> None:
+    """Demonstrate hash-balanced mode: LPT bin-packing prevents group collision.
+
+    Compared to plain hash mode where database+auth both land on shard 0 (10 tests),
+    hash-balanced spreads groups across shards: ~6 / 5 / 6 tests per shard.
+    Open the generated Allure report and navigate to Timeline — groups are evenly
+    distributed across threads, and tests within each group stay on the same thread.
+    """
+    num_shards = 3
+    demo_results = ALLURE_RESULTS_DIR / "demo-xdist-group-balanced"
+    demo_report = ALLURE_REPORT_DIR.parent / "allure-report-xdist-group-balanced"
+
+    shutil.rmtree(demo_results, ignore_errors=True)
+
+    _run_shards_parallel(
+        session,
+        test_dir="demo/demo_xdist_group_tests",
+        num_shards=num_shards,
+        results_root=demo_results,
+        extra_args=["--shard-mode=hash-balanced", "-v"],
+    )
+
+    _merge_allure_results(demo_results, demo_report, num_shards)
+    session.log(f"Allure report generated at: {demo_report.resolve()}")
+    session.log("Open with: allure open allure-report-xdist-group-balanced")
+
+
+@nox.session(name="demo-xdist-group-hash", python=False)
+def demo_xdist_group_hash(session: nox.Session) -> None:
+    """Demonstrate xdist_group co-location guarantee in hash mode.
+
+    Tests sharing the same xdist_group marker all land on the same shard.
+    Open the generated Allure report and navigate to Timeline — every test
+    in the same group will appear on exactly one thread (shard process).
+    """
+    num_shards = 3
+    demo_results = ALLURE_RESULTS_DIR / "demo-xdist-group"
+    demo_report = ALLURE_REPORT_DIR.parent / "allure-report-xdist-group"
+
+    shutil.rmtree(demo_results, ignore_errors=True)
+
+    _run_shards_parallel(
+        session,
+        test_dir="demo/demo_xdist_group_tests",
+        num_shards=num_shards,
+        results_root=demo_results,
+        extra_args=["--shard-mode=hash", "-v"],
+    )
+
+    _merge_allure_results(demo_results, demo_report, num_shards)
+    session.log(f"Allure report generated at: {demo_report.resolve()}")
+    session.log("Open with: allure open allure-report-xdist-group")
+
+
 @nox.session(name="demo-duration-comparison", python=False)
 def demo_duration_comparison(session: nox.Session) -> None:
     """Two-run comparison demo using demo/demo_duration_tests/.

@@ -233,7 +233,7 @@ Plain `hash` mode assigns every group by `SHA-256("xdist_group:<name>") % N`. Wh
 | `hash` | database(5) + auth(4) + 1 standalone = **10** | cache(4) + 1 standalone = 5 | 2 standalone = 2 |
 | `hash-balanced` | database(5) + 1 standalone = **6** | auth(4) + 1 standalone = 5 | cache(4) + 2 standalone = **6** |
 
-`hash-balanced` prevents `database` and `auth` from colliding on shard 0 and distributes load evenly.
+`hash-balanced` prevents `database` and `auth` from colliding on shard 0 and improves group-level count balance.
 
 **Demo (Allure Timeline):**
 
@@ -246,11 +246,19 @@ allure open allure-report-xdist-group-balanced
 
 | Property | `hash` | `hash-balanced` |
 |----------|--------|-----------------|
-| Stateless (per-test stable) | ✓ | ✗ (depends on all groups in collection) |
+| Stateless (per-test stable across suite changes) | ✓ | ✗ (adding/removing a group can shift other groups) |
 | Deterministic for same collection | ✓ | ✓ |
-| Prevents group collision | ✗ | ✓ |
+| Prevents large-group collision | ✗ | ✓ |
 | Groups stay together | ✓ | ✓ |
 | Needs no extra data | ✓ | ✓ |
+| Balances by test **count** | △ | ✓ (group-level) |
+| Balances by test **duration** | ✗ | ✗ (use `duration` mode instead) |
+
+> **Note:** `hash-balanced` uses **test count** as the balancing weight, not execution time. If your groups have very different per-test runtimes, count-balanced shards may still have uneven wall-clock times. In that case, consider `duration` mode.
+
+**When `hash-balanced` gives no extra benefit over `hash`:**
+- You have only **one** `xdist_group` — there is nothing to rebalance.
+- You have **no** `xdist_group` markers at all — behavior is identical to plain `hash`.
 
 ---
 
@@ -260,12 +268,12 @@ allure open allure-report-xdist-group-balanced
 |------|:---:|:---:|:---:|:---:|:---:|
 | `roundrobin` | ✓ (exact) | — | — | — | — |
 | `hash` | △ (small N) | — | — | ✓ | ✓ co-location |
-| `hash-balanced` | ✓ (group-level) | — | — | — | ✓ co-location + no collision |
-| `duration` | — | ✓ (optimal) | ✓ | — | — |
+| `hash-balanced` | △ (groups balanced; ungrouped still by hash) | — | — | — | ✓ co-location + no collision |
+| `duration` | — | ✓ (LPT heuristic; near-optimal in practice) | ✓ | — | — |
 
 ## Which mode should you choose?
 
 - Choose `roundrobin` when you want the safest default and roughly equal test counts across shards.
 - Choose `hash` when per-test assignment stability matters more than perfectly even shard sizes — adding or removing tests elsewhere never changes where an existing test lands. Use `@pytest.mark.xdist_group` to co-locate tests that share state.
-- Choose `hash-balanced` when you use `xdist_group` and want to prevent multiple large groups from colliding on the same shard. Assignment is still deterministic for the same collection, so independent pods (e.g., separate CI pods) always compute the same result without coordination.
+- Choose `hash-balanced` when you have **two or more** `xdist_group` groups and want to prevent large groups from colliding on the same shard. Each independent pod computes the same deterministic assignment without any coordination. Note that balancing is by **test count**, not duration — if runtime balance matters, use `duration` mode instead.
 - Choose `duration` when test runtimes vary a lot and total wall-clock time matters more than equal test counts. This is usually the best option for mature CI pipelines once you have a valid `.test_durations` file.

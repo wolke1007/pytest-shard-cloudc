@@ -233,7 +233,7 @@ pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards
 | `hash` | database(5) + auth(4) + 1 standalone = **10** | cache(4) + 1 standalone = 5 | 2 standalone = 2 |
 | `hash-balanced` | database(5) + 1 standalone = **6** | auth(4) + 1 standalone = 5 | cache(4) + 2 standalone = **6** |
 
-`hash-balanced` 避免了 `database` 和 `auth` 碰撞到 shard 0，實現均勻的負載分配。
+`hash-balanced` 避免了 `database` 和 `auth` 碰撞到 shard 0，並改善 group 層級的數量平衡。
 
 **Demo（Allure Timeline）：**
 
@@ -246,11 +246,19 @@ allure open allure-report-xdist-group-balanced
 
 | 特性 | `hash` | `hash-balanced` |
 |------|--------|-----------------|
-| Stateless（每測試穩定） | ✓ | ✗（取決於集合中所有 group） |
+| Stateless（測試集增減時每測試歸屬穩定） | ✓ | ✗（新增或刪除一個 group 可能使其他 group 換 shard） |
 | 相同集合結果確定 | ✓ | ✓ |
-| 避免 group 碰撞 | ✗ | ✓ |
+| 避免大型 group 碰撞 | ✗ | ✓ |
 | 同 group 必在同 shard | ✓ | ✓ |
 | 不需額外資料檔 | ✓ | ✓ |
+| 依測試**數量**平衡 | △ | ✓（group 層級） |
+| 依測試**執行時間**平衡 | ✗ | ✗（請改用 `duration` 模式） |
+
+> **注意：** `hash-balanced` 使用**測試數量**作為平衡的權重，而非執行時間。若各 group 的單個測試執行速度差異很大，count 平衡的 shard 在 wall-clock time 上仍可能不均。此時請考慮使用 `duration` 模式。
+
+**`hash-balanced` 與 `hash` 效果相同、沒有額外幫助的情況：**
+- 你只有**一個** `xdist_group` — 沒有其他 group 可以重新平衡。
+- 你**完全沒有** `xdist_group` marker — 行為與純 `hash` 完全一致。
 
 ---
 
@@ -260,12 +268,12 @@ allure open allure-report-xdist-group-balanced
 |------|:---:|:---:|:---:|:---:|:---:|
 | `roundrobin` | ✓（精確） | — | — | — | — |
 | `hash` | △（小樣本） | — | — | ✓ | ✓ 同 shard |
-| `hash-balanced` | ✓（group 層級） | — | — | — | ✓ 同 shard + 不碰撞 |
-| `duration` | — | ✓（最佳化） | ✓ | — | — |
+| `hash-balanced` | △（group 層級平衡；ungrouped 仍用 hash） | — | — | — | ✓ 同 shard + 不碰撞 |
+| `duration` | — | ✓（LPT 近似法；實務上通常接近最優） | ✓ | — | — |
 
 ## 該選哪一種模式？
 
 - 如果你想要最穩妥的預設行為，並希望各 shard 的測試數量大致平均，選 `roundrobin`。
 - 如果你更在意每個測試的分配穩定性，例如希望測試集增減時某個既有測試仍留在同一個 shard，選 `hash`。可搭配 `@pytest.mark.xdist_group` 確保需要共用狀態的測試落在同一 shard。
-- 如果你使用 `xdist_group`，且希望避免多個大型 group 碰撞到同一個 shard，選 `hash-balanced`。相同測試集的分配結果具有確定性，各個獨立 pod（例如 CI 中分開執行的容器）可以在不互相協調的前提下算出完全一致的結果。
+- 如果你有**兩個以上**的 `xdist_group`，且希望避免大型 group 碰撞到同一個 shard，選 `hash-balanced`。各個獨立 pod（例如 CI 中分開執行的容器）不需互相協調，就能算出完全一致的確定性結果。注意平衡依據是**測試數量**而非執行時間；若需要時間平衡，請改用 `duration` 模式。
 - 如果測試執行時間差異很大，而且你更在意整體 wall-clock time 而不是每個 shard 的測試數量，選 `duration`。在成熟的 CI pipeline 中，只要你已有有效的 `.test_durations` 檔案，通常這會是最佳選項。

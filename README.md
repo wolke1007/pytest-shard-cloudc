@@ -21,7 +21,7 @@ See [Sharding Modes](doc/sharding-modes.md) for separate diagrams that explain h
 |------------|-------------|
 | **Round-robin sharding** (default) | Sorts tests by node ID and interleaves across shards, guaranteeing shard counts differ by at most 1 |
 | **Hash-based sharding** | Assigns each test deterministically via `SHA-256(node_id) % N` — per-test stable even as the suite grows; respects `xdist_group` co-location |
-| **Hash-balanced sharding** | LPT bin-packing for `xdist_group` groups prevents collision; ungrouped tests use hash; deterministic for the same test collection |
+| **Hash-balanced sharding** | LPT bin-packing greedily spreads `xdist_group` groups by test count; ungrouped tests still use hash; deterministic for the same test collection |
 | **Duration-based sharding** | Greedy bin-packing using a `.test_durations` file (compatible with pytest-split) to minimise the longest shard |
 | **Zero configuration** | Just add `--shard-id` and `--num-shards` — no config files, no test ordering required |
 | **Any granularity** | Splits at the individual test level, not at the file or class level |

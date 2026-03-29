@@ -21,7 +21,7 @@
 |------|------|
 | **Round-robin 分配**（預設） | 依 node ID 排序後輪流分配，保證各 shard 的測試數量差距不超過 1 |
 | **Hash-based 分配** | 透過 `SHA-256(node_id) % N` 進行分配，每個測試的歸屬獨立穩定，不受其他測試增減影響；支援 `xdist_group` 同 shard 保證 |
-| **Hash-balanced 分配** | 對 `xdist_group` 的各 group 使用 LPT bin-packing，避免多個大型 group 碰撞到同一 shard；ungrouped 測試用 hash 分配；相同測試集的計算結果具有確定性 |
+| **Hash-balanced 分配** | 對 `xdist_group` 的各 group 依測試數量做 LPT bin-packing；ungrouped 測試仍用 hash 分配；相同測試集的計算結果具有確定性 |
 | **Duration-based 分配** | 使用 `.test_durations` 檔案（與 pytest-split 格式相容）進行貪婪 bin-packing，最小化最慢 shard 的執行時間 |
 | **零設定** | 只需加上 `--shard-id` 與 `--num-shards` 參數，無需設定檔，也不需調整測試順序 |
 | **最細粒度分配** | 以個別測試為單位切分，而非以檔案或 class 為單位 |

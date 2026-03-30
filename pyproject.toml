@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-shard-cloudc"
-version = "1.0.1"
+version = "1.2.0"
 description = "Shard tests to support parallelism across multiple machines."
 readme = "README.md"
 requires-python = ">=3.11"

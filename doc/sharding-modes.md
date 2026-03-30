@@ -182,7 +182,7 @@ pytest tests --store-durations --durations-path=artifacts/test_durations.json
 - Existing entries in the file are preserved; tests executed in the current run overwrite only their own entries.
 - When running shards in parallel, each shard should write to its own file, then you merge them before using `--shard-mode=duration`.
 
-## Verbose shard report
+## Shard assignment report
 
 By default, pytest prints a one-line summary at collection time:
 
@@ -190,11 +190,23 @@ By default, pytest prints a one-line summary at collection time:
 Running 7 items in this shard (mode: roundrobin)
 ```
 
-Pass `-v` to also list every test node ID assigned to this shard:
+**Option 1 — `-v` (verbose):** lists every assigned test ID on the same line, separated by commas:
 
 ```
-Running 7 items in this shard (mode: roundrobin): tests/test_foo.py::test_a, ...
+Running 7 items in this shard (mode: roundrobin): tests/test_foo.py::test_a, tests/test_foo.py::test_b, ...
 ```
+
+**Option 2 — `--list-shard-tests`:** prints each assigned test ID on its own line, one per row. Easier to read and grep in CI logs:
+
+```
+Running 7 items in this shard (mode: hash)
+  tests/test_foo.py::test_a
+  tests/test_foo.py::test_b
+  tests/test_foo.py::test_c
+  ...
+```
+
+`--list-shard-tests` works with any shard mode and does not require `-v`. When both flags are set, `--list-shard-tests` takes priority.
 
 ## Duration mode prerequisite
 

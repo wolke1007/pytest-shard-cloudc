@@ -182,7 +182,7 @@ pytest tests --store-durations --durations-path=artifacts/test_durations.json
 - 檔案中原有的紀錄會保留；本次執行到的測試只會覆寫自己的項目。
 - 如果是平行 shard 執行，建議每個 shard 先寫到各自的檔案，再合併後給 `--shard-mode=duration` 使用。
 
-## Verbose shard 報告
+## Shard 分配報告
 
 預設情況下，pytest 會在收集階段印出一行摘要：
 
@@ -190,11 +190,23 @@ pytest tests --store-durations --durations-path=artifacts/test_durations.json
 Running 7 items in this shard (mode: roundrobin)
 ```
 
-加上 `-v` 後，會額外列出該 shard 分配到的所有測試 node ID：
+**方式 1 — `-v`（verbose）：** 在同一行印出所有分配到的測試 ID，以逗號分隔：
 
 ```
-Running 7 items in this shard (mode: roundrobin): tests/test_foo.py::test_a, ...
+Running 7 items in this shard (mode: roundrobin): tests/test_foo.py::test_a, tests/test_foo.py::test_b, ...
 ```
+
+**方式 2 — `--list-shard-tests`：** 將每個測試 ID 各佔一行印出，方便在 CI log 中閱讀或 grep：
+
+```
+Running 7 items in this shard (mode: hash)
+  tests/test_foo.py::test_a
+  tests/test_foo.py::test_b
+  tests/test_foo.py::test_c
+  ...
+```
+
+`--list-shard-tests` 適用於所有 shard mode，不需要搭配 `-v`。若同時設定兩者，`--list-shard-tests` 優先。
 
 ## Duration 模式的前置條件
 

@@ -112,6 +112,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "afterward to obtain complete duration data."
         ),
     )
+    group.addoption(
+        "--list-shard-tests",
+        dest="list_shard_tests",
+        action="store_true",
+        default=False,
+        help=(
+            "Print every test node ID assigned to this shard before the run starts, "
+            "one per line. Useful for verifying shard assignment without relying on -v."
+        ),
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -130,9 +140,12 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_report_collectionfinish(config: pytest.Config, items: Sequence[pytest.Item]) -> str:
-    """Log how many and, if verbose, which items are tested in this shard."""
+    """Log how many and, if requested, which items are tested in this shard."""
     mode = config.getoption("shard_mode")
     msg = f"Running {len(items)} items in this shard (mode: {mode})"
+    if config.getoption("list_shard_tests", default=False):
+        lines = [msg] + [f"  {item.nodeid}" for item in items]
+        return "\n".join(lines)
     if config.option.verbose > 0 and config.getoption("num_shards") > 1:
         msg += ": " + ", ".join(item.nodeid for item in items)
     return msg

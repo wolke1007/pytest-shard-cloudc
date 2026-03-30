@@ -333,9 +333,10 @@ def test_pytest_collection_modifyitems_duration_file_not_found(tmp_path):
 
 
 def test_pytest_report_collectionfinish_with_verbose_output():
+    opts = {"num_shards": 2, "shard_mode": "roundrobin", "list_shard_tests": False}
     config = SimpleNamespace(
         option=SimpleNamespace(verbose=1),
-        getoption=lambda name: {"num_shards": 2, "shard_mode": "roundrobin"}[name],
+        getoption=lambda name, default=None: opts.get(name, default),
     )
     items = [MockItem("test_module.py::test_first"), MockItem("test_module.py::test_second")]
 
@@ -345,6 +346,123 @@ def test_pytest_report_collectionfinish_with_verbose_output():
         "Running 2 items in this shard (mode: roundrobin): "
         "test_module.py::test_first, test_module.py::test_second"
     )
+
+
+def test_pytest_report_collectionfinish_list_shard_tests_prints_one_per_line():
+    opts = {"num_shards": 2, "shard_mode": "hash", "list_shard_tests": True}
+    config = SimpleNamespace(
+        option=SimpleNamespace(verbose=0),
+        getoption=lambda name, default=None: opts.get(name, default),
+    )
+    items = [MockItem("test_module.py::test_first"), MockItem("test_module.py::test_second")]
+
+    message = pytest_shard.pytest_report_collectionfinish(config, items)
+
+    assert message == (
+        "Running 2 items in this shard (mode: hash)\n"
+        "  test_module.py::test_first\n"
+        "  test_module.py::test_second"
+    )
+
+
+def test_pytest_report_collectionfinish_list_shard_tests_takes_priority_over_verbose():
+    """--list-shard-tests produces one-per-line output even when -v is also set."""
+    opts = {"num_shards": 2, "shard_mode": "hash", "list_shard_tests": True}
+    config = SimpleNamespace(
+        option=SimpleNamespace(verbose=1),
+        getoption=lambda name, default=None: opts.get(name, default),
+    )
+    items = [MockItem("test_module.py::test_a")]
+
+    message = pytest_shard.pytest_report_collectionfinish(config, items)
+
+    assert "\n  test_module.py::test_a" in message
+
+
+def test_list_shard_tests_hash_balanced_demo_suite_covers_100_without_overlap():
+    """Two hash-balanced shards should print a complete, non-overlapping test list."""
+    demo_suite = {
+        "demo/demo_tests/test_arithmetic.py": {
+            "TestAddition": [
+                "test_add_positive", "test_add_zero", "test_add_negative", "test_add_floats", "test_add_large",
+            ],
+            "TestSubtraction": [
+                "test_sub_positive", "test_sub_zero", "test_sub_negative", "test_sub_self", "test_sub_floats",
+            ],
+            "TestMultiplication": [
+                "test_mul_positive", "test_mul_zero", "test_mul_one", "test_mul_negative", "test_mul_floats",
+            ],
+            "TestDivision": [
+                "test_div_even", "test_div_float_result", "test_floordiv", "test_modulo", "test_div_by_zero_raises",
+            ],
+        },
+        "demo/demo_tests/test_collections.py": {
+            "TestList": ["test_append", "test_pop", "test_sort", "test_reverse", "test_slice"],
+            "TestDict": ["test_get", "test_get_default", "test_keys", "test_update", "test_pop"],
+            "TestSet": ["test_union", "test_intersection", "test_difference", "test_in", "test_add"],
+            "TestTuple": ["test_index", "test_length", "test_unpack", "test_count", "test_immutable"],
+        },
+        "demo/demo_tests/test_comparisons.py": {
+            "TestNumericComparisons": [
+                "test_equal", "test_not_equal", "test_less", "test_greater", "test_less_equal",
+            ],
+            "TestBooleanLogic": ["test_and_true", "test_and_false", "test_or_true", "test_or_false", "test_not"],
+            "TestIdentityMembership": [
+                "test_is_none", "test_is_not_none", "test_in_list", "test_not_in_list", "test_in_string",
+            ],
+            "TestEdgeCases": [
+                "test_none_equality", "test_bool_is_int", "test_empty_is_falsy", "test_zero_is_falsy",
+                "test_chained_comparison",
+            ],
+        },
+        "demo/demo_tests/test_strings.py": {
+            "TestStringBasics": ["test_length", "test_empty", "test_concatenation", "test_repetition", "test_in_operator"],
+            "TestStringCase": ["test_upper", "test_lower", "test_title", "test_swapcase", "test_capitalize"],
+            "TestStringSearch": ["test_find", "test_find_missing", "test_replace", "test_startswith", "test_endswith"],
+            "TestStringSplitJoin": ["test_split", "test_split_default", "test_join", "test_strip", "test_splitlines"],
+        },
+        "demo/demo_tests/test_types.py": {
+            "TestTypeChecking": [
+                "test_isinstance_int", "test_isinstance_str", "test_isinstance_list", "test_isinstance_multi",
+                "test_type_equality",
+            ],
+            "TestTypeConversion": [
+                "test_int_to_str", "test_str_to_int", "test_float_to_int", "test_int_to_float", "test_list_to_set",
+            ],
+            "TestBuiltins": ["test_abs", "test_round", "test_min", "test_max", "test_sum"],
+            "TestIterables": ["test_enumerate", "test_zip", "test_map", "test_filter", "test_sorted"],
+        },
+    }
+    items = [
+        MockItem(f"{path}::{class_name}::{test_name}")
+        for path, classes in demo_suite.items()
+        for class_name, test_names in classes.items()
+        for test_name in test_names
+    ]
+    assert len(items) == 100
+
+    shard_nodeids: list[set[str]] = []
+    for shard_id in range(2):
+        assigned = pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=shard_id, num_shards=2)
+        opts = {"num_shards": 2, "shard_mode": "hash-balanced", "list_shard_tests": True}
+        config = SimpleNamespace(
+            option=SimpleNamespace(verbose=0),
+            getoption=lambda name, default=None: opts.get(name, default),
+        )
+
+        message = pytest_shard.pytest_report_collectionfinish(config, assigned)
+        lines = message.splitlines()
+        listed_nodeids = [line.strip() for line in lines[1:]]
+
+        assert lines[0] == f"Running {len(assigned)} items in this shard (mode: hash-balanced)"
+        assert len(listed_nodeids) == len(assigned)
+        assert len(set(listed_nodeids)) == len(listed_nodeids)
+        assert set(listed_nodeids) == {item.nodeid for item in assigned}
+        shard_nodeids.append(set(listed_nodeids))
+
+    assert len(shard_nodeids[0]) + len(shard_nodeids[1]) == 100
+    assert shard_nodeids[0].isdisjoint(shard_nodeids[1])
+    assert shard_nodeids[0] | shard_nodeids[1] == {item.nodeid for item in items}
 
 
 # ---------------------------------------------------------------------------

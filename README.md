@@ -134,6 +134,18 @@ nox
 
 The Allure integration test also requires the `allure` CLI to be available on `PATH`.
 
+### Version bumps
+
+This repo uses `bump-my-version` to update the package version in `pyproject.toml` and `uv.lock`.
+
+```bash
+pip install -e .[dev]
+bump-my-version bump patch --dry-run
+bump-my-version bump patch
+```
+
+Use `minor` or `major` in place of `patch` when needed.
+
 ## License
 
 MIT licensed.

@@ -382,7 +382,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "python-discovery"
-version = "1.2.1"
+version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },

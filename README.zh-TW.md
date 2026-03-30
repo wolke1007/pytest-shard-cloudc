@@ -134,6 +134,18 @@ nox
 
 Allure 整合測試另需在 `PATH` 中提供 `allure` CLI。
 
+### 版號升級
+
+本 repo 使用 `bump-my-version` 同步更新 `pyproject.toml` 與 `uv.lock` 中的套件版號。
+
+```bash
+pip install -e .[dev]
+bump-my-version bump patch --dry-run
+bump-my-version bump patch
+```
+
+若需要升 `minor` 或 `major`，把 `patch` 換掉即可。
+
 ## 授權
 
 MIT 授權。

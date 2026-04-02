@@ -721,8 +721,8 @@ def test_hash_balanced_large_groups_on_different_shards():
     )
 
 
-def test_hash_balanced_no_groups_behaves_like_hash():
-    """With no xdist_group markers, hash-balanced must produce the same result as hash."""
+def test_hash_balanced_no_groups_behaves_like_roundrobin():
+    """With no xdist_group markers, hash-balanced must produce the same result as round-robin."""
     items = [MockItem(f"test_{i}") for i in range(20)]
     num_shards = 4
 
@@ -730,11 +730,11 @@ def test_hash_balanced_no_groups_behaves_like_hash():
         set(pytest_shard.filter_items_by_shard_group_balanced(items, shard_id=i, num_shards=num_shards))
         for i in range(num_shards)
     ]
-    hash_results = [
-        set(pytest_shard.filter_items_by_shard(items, shard_id=i, num_shards=num_shards))
+    roundrobin_results = [
+        set(pytest_shard.filter_items_round_robin(items, shard_id=i, num_shards=num_shards))
         for i in range(num_shards)
     ]
-    assert balanced_results == hash_results
+    assert balanced_results == roundrobin_results
 
 
 def test_hash_balanced_all_grouped_covers_all():

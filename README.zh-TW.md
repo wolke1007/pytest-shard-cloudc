@@ -21,7 +21,7 @@
 |------|------|
 | **Round-robin 分配**（預設） | 依 node ID 排序後輪流分配，保證各 shard 的測試數量差距不超過 1 |
 | **Hash-based 分配** | 透過 `SHA-256(node_id) % N` 進行分配，每個測試的歸屬獨立穩定，不受其他測試增減影響；支援 `xdist_group` 同 shard 保證 |
-| **Hash-balanced 分配** | 對 `xdist_group` 的各 group 依測試數量做 LPT bin-packing；ungrouped 測試仍用 hash 分配；相同測試集的計算結果具有確定性 |
+| **Hash-balanced 分配** | 對 `xdist_group` 的各 group 依測試數量做 LPT bin-packing；ungrouped 測試改用 round-robin（依 node ID）分配；相同測試集的計算結果具有確定性 |
 | **Duration-based 分配** | 使用 `.test_durations` 檔案（與 pytest-split 格式相容）進行貪婪 bin-packing，最小化最慢 shard 的執行時間 |
 | **零設定** | 只需加上 `--shard-id` 與 `--num-shards` 參數，無需設定檔，也不需調整測試順序 |
 | **最細粒度分配** | 以個別測試為單位切分，而非以檔案或 class 為單位 |
@@ -68,7 +68,7 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=roundrobin
 # Hash — 每個測試的歸屬穩定，無狀態
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash
 
-# Hash-balanced — 依測試數量貪婪地分散 xdist_group；ungrouped 測試仍用 hash
+# Hash-balanced — 依測試數量貪婪地分散 xdist_group；ungrouped 測試改用 round-robin
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash-balanced
 
 # Duration — 依歷史執行時間做 bin-packing，最小化最慢 shard
@@ -81,7 +81,7 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=duration --durations-path=.test_
 
 - 如果你想要最穩妥的預設值，且不想先準備任何額外資料，選 `roundrobin`。
 - 如果你最在意每個測試的歸屬穩定性，或你使用 `xdist_group` 但不需要重新平衡大型 group，選 `hash`。
-- 如果你有兩個以上的大型 `xdist_group`，想降低它們碰撞到同一 shard 的機率，選 `hash-balanced`。
+- 如果你使用 `xdist_group` 且希望避免大型 group 碰撞，選 `hash-balanced`。ungrouped 測試會 fallback 到 round-robin，因此即使大多數測試沒有 group marker，各 shard 的數量仍能保持平衡。
 - 如果測試執行時間差異很大，而且你已經有可用的 `.test_durations` 檔案，選 `duration`。
 
 ### GitHub Actions 範例

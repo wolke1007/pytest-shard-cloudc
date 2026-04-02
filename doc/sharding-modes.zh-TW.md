@@ -222,7 +222,7 @@ pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards
 
 ```
 有 xdist_group 的測試  → 依 group 大小做 LPT bin-packing
-無 xdist_group 的測試  → SHA-256(node_id) % num_shards
+無 xdist_group 的測試  → 依 node ID 排序後做 round-robin
 ```
 
 純 `hash` 模式對每個 group 計算 `SHA-256("xdist_group:<name>") % N`。當多個大型 group 碰巧 hash 到同一個 shard 時，該 shard 會過載，其他 shard 卻幾乎沒有工作。
@@ -232,7 +232,7 @@ pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards
 1. 將所有測試分成「有 xdist_group」與「無 xdist_group」兩類。
 2. 依 group 大小**降序**排序，大小相同時再依 group 名稱**升序**排序（作為 tiebreaker）。
 3. 依序將每個 group 分配到目前測試數量最少的 shard（貪婪策略）。
-4. 無 group 的測試維持 `SHA-256(node_id) % num_shards` 分配（同純 hash 模式）。
+4. 將無 group 的測試依 node ID 排序，再貪婪地分配給目前測試數量最少的 shard。當完全沒有 xdist_group（所有 count 起始為 0）時，此方式等同純 round-robin（`index % num_shards`），保證各 shard 數量差距不超過 1。
 
 **確定性保證：** 排序鍵與貪婪選擇均完全確定。每個 pod 從相同的測試集獨立計算出相同的全域分配表，不需要跨程序協調，不會有重疊或遺漏。
 
@@ -268,7 +268,8 @@ allure open allure-report-xdist-group-balanced
 
 **`hash-balanced` 與 `hash` 效果相同、沒有額外幫助的情況：**
 - 你只有**一個** `xdist_group` — 沒有其他 group 可以重新平衡。
-- 你**完全沒有** `xdist_group` marker — 行為與純 `hash` 完全一致。
+
+**注意：** 若你**完全沒有** `xdist_group` marker，`hash-balanced` 的行為等同 `roundrobin`（而非 `hash`）— ungrouped 測試依 node ID 排序後均勻分配，保證各 shard 數量差距不超過 1。
 
 ---
 
@@ -278,12 +279,12 @@ allure open allure-report-xdist-group-balanced
 |------|:---:|:---:|:---:|:---:|:---:|
 | `roundrobin` | ✓（精確） | — | — | — | — |
 | `hash` | △（小樣本） | — | — | ✓ | ✓ 同 shard |
-| `hash-balanced` | △（group 層級平衡；ungrouped 仍用 hash） | — | — | — | ✓ 同 shard + 不碰撞 |
+| `hash-balanced` | ✓（group 層級 LPT；ungrouped 用 round-robin） | — | — | — | ✓ 同 shard + 不碰撞 |
 | `duration` | — | ✓（LPT 近似法；實務上通常接近最優） | ✓ | — | — |
 
 ## 該選哪一種模式？
 
 - 如果你想要最穩妥的預設行為，並希望各 shard 的測試數量大致平均，選 `roundrobin`。
 - 如果你更在意每個測試的分配穩定性，例如希望測試集增減時某個既有測試仍留在同一個 shard，選 `hash`。可搭配 `@pytest.mark.xdist_group` 確保需要共用狀態的測試落在同一 shard。
-- 如果你有**兩個以上**的 `xdist_group`，且希望避免大型 group 碰撞到同一個 shard，選 `hash-balanced`。各個獨立 pod（例如 CI 中分開執行的容器）不需互相協調，就能算出完全一致的確定性結果。注意平衡依據是**測試數量**而非執行時間；若需要時間平衡，請改用 `duration` 模式。
+- 如果你使用 `xdist_group` 且希望避免大型 group 碰撞到同一個 shard，選 `hash-balanced`。ungrouped 測試會 fallback 到 round-robin，因此即使大多數測試沒有 group marker，各 shard 的數量仍能保持平衡。各個獨立 pod 不需互相協調，就能算出完全一致的確定性結果。注意平衡依據是**測試數量**而非執行時間；若需要時間平衡，請改用 `duration` 模式。
 - 如果測試執行時間差異很大，而且你更在意整體 wall-clock time 而不是每個 shard 的測試數量，選 `duration`。在成熟的 CI pipeline 中，只要你已有有效的 `.test_durations` 檔案，通常這會是最佳選項。

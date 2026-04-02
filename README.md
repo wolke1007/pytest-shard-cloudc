@@ -21,7 +21,7 @@ See [Sharding Modes](doc/sharding-modes.md) for diagrams and trade-offs covering
 |------------|-------------|
 | **Round-robin sharding** (default) | Sorts tests by node ID and interleaves across shards, guaranteeing shard counts differ by at most 1 |
 | **Hash-based sharding** | Assigns each test deterministically via `SHA-256(node_id) % N` — per-test stable even as the suite grows; respects `xdist_group` co-location |
-| **Hash-balanced sharding** | LPT bin-packing greedily spreads `xdist_group` groups by test count; ungrouped tests still use hash; deterministic for the same test collection |
+| **Hash-balanced sharding** | LPT bin-packing greedily spreads `xdist_group` groups by test count; ungrouped tests use round-robin (by node ID); deterministic for the same test collection |
 | **Duration-based sharding** | Greedy bin-packing using a `.test_durations` file (compatible with pytest-split) to minimise the longest shard |
 | **Zero configuration** | Just add `--shard-id` and `--num-shards` — no config files, no test ordering required |
 | **Any granularity** | Splits at the individual test level, not at the file or class level |
@@ -68,7 +68,7 @@ pytest --shard-id=0 --num-shards=3 --shard-mode=roundrobin
 # Hash — per-test stable assignment, stateless
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash
 
-# Hash-balanced — greedily spreads xdist_group groups by test count; ungrouped tests still use hash
+# Hash-balanced — greedily spreads xdist_group groups by test count; ungrouped tests use round-robin
 pytest --shard-id=0 --num-shards=3 --shard-mode=hash-balanced
 
 # Duration — bin-packing by recorded test times, minimises longest shard
@@ -81,7 +81,7 @@ See [Sharding Modes](doc/sharding-modes.md) for detailed trade-offs, `.test_dura
 
 - Use `roundrobin` if you want the safest default and roughly even test counts with no extra setup.
 - Use `hash` if per-test stability matters most, or if you rely on `xdist_group` and want group co-location without rebalancing.
-- Use `hash-balanced` if you have two or more large `xdist_group` groups and want to reduce large-group collisions across shards.
+- Use `hash-balanced` if you use `xdist_group` and want to prevent large-group collisions — ungrouped tests fall back to round-robin, so shard sizes stay balanced even when most tests have no group marker.
 - Use `duration` if test runtimes vary a lot and you already have a valid `.test_durations` file.
 
 ### GitHub Actions example

@@ -222,7 +222,7 @@ pytest tests --shard-mode=duration --durations-path=.test_durations --num-shards
 
 ```
 Groups (tests with xdist_group) → LPT bin-packing by group size
-Ungrouped tests                 → SHA-256(node_id) % num_shards
+Ungrouped tests                 → round-robin by node ID (sorted)
 ```
 
 Plain `hash` mode assigns every group by `SHA-256("xdist_group:<name>") % N`. When multiple large groups happen to hash to the same shard, that shard becomes overloaded while others stay nearly empty.
@@ -232,7 +232,7 @@ Plain `hash` mode assigns every group by `SHA-256("xdist_group:<name>") % N`. Wh
 1. Separate items into groups (have `xdist_group`) and ungrouped.
 2. Sort groups by size **descending**, group name **ascending** as tiebreaker.
 3. Assign each group greedily to the shard with the fewest tests so far.
-4. Assign ungrouped items via `SHA-256(node_id) % num_shards` (same as plain hash).
+4. Sort ungrouped items by node ID and assign each greedily to the shard with the fewest tests so far. When no groups exist (all counts start at zero), this degenerates to pure round-robin (`index % num_shards`), guaranteeing shard sizes differ by at most 1.
 
 **Determinism guarantee:** the sort key and the greedy selection are both fully deterministic. Every pod independently computes the same global assignment table from the same test collection — no inter-process coordination is needed, and there is no risk of overlap or gaps.
 
@@ -267,8 +267,9 @@ allure open allure-report-xdist-group-balanced
 > **Note:** `hash-balanced` uses **test count** as the balancing weight, not execution time. If your groups have very different per-test runtimes, count-balanced shards may still have uneven wall-clock times. In that case, consider `duration` mode.
 
 **When `hash-balanced` gives no extra benefit over `hash`:**
-- You have only **one** `xdist_group` — there is nothing to rebalance.
-- You have **no** `xdist_group` markers at all — behavior is identical to plain `hash`.
+- You have only **one** `xdist_group` — there is nothing to rebalance between groups.
+
+**Note:** When you have **no** `xdist_group` markers at all, `hash-balanced` behaves like plain `roundrobin` (not `hash`) — ungrouped tests are sorted by node ID and distributed evenly, guaranteeing shard sizes differ by at most 1.
 
 ---
 
@@ -278,12 +279,12 @@ allure open allure-report-xdist-group-balanced
 |------|:---:|:---:|:---:|:---:|:---:|
 | `roundrobin` | ✓ (exact) | — | — | — | — |
 | `hash` | △ (small N) | — | — | ✓ | ✓ co-location |
-| `hash-balanced` | △ (groups balanced; ungrouped still by hash) | — | — | — | ✓ co-location + no collision |
+| `hash-balanced` | ✓ (groups balanced by LPT; ungrouped by round-robin) | — | — | — | ✓ co-location + no collision |
 | `duration` | — | ✓ (LPT heuristic; near-optimal in practice) | ✓ | — | — |
 
 ## Which mode should you choose?
 
 - Choose `roundrobin` when you want the safest default and roughly equal test counts across shards.
 - Choose `hash` when per-test assignment stability matters more than perfectly even shard sizes — adding or removing tests elsewhere never changes where an existing test lands. Use `@pytest.mark.xdist_group` to co-locate tests that share state.
-- Choose `hash-balanced` when you have **two or more** `xdist_group` groups and want to prevent large groups from colliding on the same shard. Each independent pod computes the same deterministic assignment without any coordination. Note that balancing is by **test count**, not duration — if runtime balance matters, use `duration` mode instead.
+- Choose `hash-balanced` when you use `xdist_group` and want to prevent large groups from colliding on the same shard. Ungrouped tests fall back to round-robin, so shard sizes stay balanced even when most tests have no group marker. Each independent pod computes the same deterministic assignment without any coordination. Note that balancing is by **test count**, not duration — if runtime balance matters, use `duration` mode instead.
 - Choose `duration` when test runtimes vary a lot and total wall-clock time matters more than equal test counts. This is usually the best option for mature CI pipelines once you have a valid `.test_durations` file.

@@ -86,7 +86,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "'roundrobin' (default): sort by node ID then interleave, guarantees count balance. "
             "'hash': SHA-256 hash of node ID, stateless and per-test stable. "
             "'hash-balanced': LPT bin-packing for xdist_group groups to avoid collision, "
-            "hash by node ID for ungrouped tests; deterministic for the same test collection. "
+            "round-robin by node ID for ungrouped tests; deterministic for the same test collection. "
             "'duration': greedy bin-packing by duration, requires --durations-path."
         ),
     )
@@ -258,7 +258,7 @@ def _warn_if_group_dominates_shard(
 def filter_items_by_shard_group_balanced(
     items: Iterable[pytest.Item], shard_id: int, num_shards: int
 ) -> Sequence[pytest.Item]:
-    """Hash-balanced mode: LPT bin-packing for xdist_group groups, hash for the rest.
+    """Hash-balanced mode: LPT bin-packing for xdist_group groups, round-robin for the rest.
 
     Groups (tests sharing an xdist_group marker) are treated as atomic units and
     assigned to shards using the Longest Processing Time (LPT) greedy algorithm:
@@ -266,8 +266,11 @@ def filter_items_by_shard_group_balanced(
     each group to the shard with the fewest tests so far. This prevents multiple
     large groups from colliding on the same shard.
 
-    Ungrouped tests (no xdist_group marker) are assigned via SHA-256(node_id) %
-    num_shards, identical to plain hash mode.
+    Ungrouped tests (no xdist_group marker) are sorted by node ID and assigned
+    greedily to the shard with the fewest tests at that point. When no xdist_group
+    markers are present at all, all shard counts start at zero and the greedy
+    assignment degenerates to pure round-robin (equivalent to index % num_shards),
+    guaranteeing shard sizes differ by at most 1.
 
     Deterministic: given the same test collection, every shard process computes the
     same global assignment table independently and filters to its own subset — no
@@ -285,20 +288,24 @@ def filter_items_by_shard_group_balanced(
         else:
             ungrouped.append(item)
 
-    # Sort by size desc, name asc as tiebreaker — fully deterministic
-    sorted_groups = sorted(grouped.items(), key=lambda x: (-len(x[1]), x[0]))
-
     shard_counts = [0] * num_shards
     shard_items: list[list[pytest.Item]] = [[] for _ in range(num_shards)]
 
+    # LPT bin-packing for xdist_group groups: sort by size desc, name asc as tiebreaker
+    sorted_groups = sorted(grouped.items(), key=lambda x: (-len(x[1]), x[0]))
     for _group_name, group_items in sorted_groups:
         target = min(range(num_shards), key=lambda i: shard_counts[i])
         shard_items[target].extend(group_items)
         shard_counts[target] += len(group_items)
 
-    for item in ungrouped:
-        target = sha256hash(item.nodeid) % num_shards
+    # Ungrouped tests: sort by node ID for determinism, then greedily fill the
+    # least-loaded shard. When shard_counts are all zero (no xdist_group markers
+    # anywhere), this is identical to round-robin (index % num_shards).
+    sorted_ungrouped = sorted(ungrouped, key=lambda item: item.nodeid)
+    for item in sorted_ungrouped:
+        target = min(range(num_shards), key=lambda i: shard_counts[i])
         shard_items[target].append(item)
+        shard_counts[target] += 1
 
     return shard_items[shard_id]
 
